@@ -193,3 +193,53 @@ export const uploadRequirementFile = (file: File): Promise<{ file_id: number; na
     headers: { 'Content-Type': 'multipart/form-data' },
   });
 };
+
+// ─────────────────────────────────────────────
+// 认证相关 API
+// ─────────────────────────────────────────────
+
+/**
+ * 用户登录
+ * POST /api/auth/login
+ */
+export const login = (username: string, password: string): Promise<{
+  access_token: string;
+  token_type: string;
+  user: {
+    id: number;
+    username: string;
+    role: string;
+  };
+}> => {
+  return http.post('/api/auth/login', {
+    username,
+    password
+  });
+};
+
+/**
+ * 用户注册
+ * POST /api/auth/register
+ */
+export const register = (username: string, password: string): Promise<{
+  id: number;
+  username: string;
+  role: string;
+}> => {
+  return http.post('/api/auth/register', {
+    username,
+    password
+  });
+};
+
+/**
+ * 获取当前用户信息
+ * GET /api/auth/me
+ */
+export const getCurrentUser = (): Promise<{
+  id: number;
+  username: string;
+  role: string;
+}> => {
+  return http.get('/api/auth/me');
+};

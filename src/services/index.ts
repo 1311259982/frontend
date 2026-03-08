@@ -39,6 +39,9 @@ export const {
     getStandards,
     uploadStandardFile,
     uploadRequirementFile,
+    login,
+    register,
+    getCurrentUser,
 } = service;
 
 // 仅 mock 有的额外函数（不影响 api 模式）

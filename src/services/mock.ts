@@ -308,3 +308,66 @@ export const uploadRequirementFile = async (file: File): Promise<{ file_id: numb
     await delay(500);
     return { file_id: genId(), name: file.name, size: `${(file.size / 1024).toFixed(2)} KB` };
 };
+
+// ─────────────────────────────────────────────
+// 认证相关 Mock
+// ─────────────────────────────────────────────
+
+/**
+ * 模拟用户登录
+ */
+export const login = async (username: string, password: string): Promise<{
+    access_token: string;
+    token_type: string;
+    user: {
+        id: number;
+        username: string;
+        role: string;
+    };
+}> => {
+    await delay(300);
+    // 模拟登录成功
+    return {
+        access_token: `mock_token_${Date.now()}`,
+        token_type: 'bearer',
+        user: {
+            id: 1,
+            username,
+            role: 'user' // 默认角色
+        }
+    };
+};
+
+/**
+ * 模拟用户注册
+ */
+export const register = async (username: string, password: string): Promise<{
+    id: number;
+    username: string;
+    role: string;
+}> => {
+    await delay(300);
+    // 模拟注册成功
+    return {
+        id: genId(),
+        username,
+        role: 'user' // 默认角色
+    };
+};
+
+/**
+ * 模拟获取当前用户信息
+ */
+export const getCurrentUser = async (): Promise<{
+    id: number;
+    username: string;
+    role: string;
+}> => {
+    await delay(200);
+    // 模拟用户信息
+    return {
+        id: 1,
+        username: 'demo_user',
+        role: 'user'
+    };
+};

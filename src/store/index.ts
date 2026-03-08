@@ -2,7 +2,8 @@ import { defineStore } from 'pinia';
 import {
   getBaselines, createBaseline, deleteBaseline,
   getEvaluations, createEvaluation, deleteEvaluation,
-  archiveEvaluation, getStandards, seedData
+  archiveEvaluation, getStandards, seedData,
+  login, register, getCurrentUser
 } from '@/services';
 
 // ─────────────────────────────────────────────
@@ -15,15 +16,51 @@ export const useAuthStore = defineStore('auth', {
     isLoggedIn: false,
   }),
   actions: {
-    login(username: string, role: 'admin' | 'user') {
-      this.user = { username };
-      this.role = role;
-      this.isLoggedIn = true;
+    async login(username: string, password: string) {
+      try {
+        const response = await login(username, password);
+        localStorage.setItem('auth_token', response.access_token);
+        this.user = response.user;
+        this.role = response.user.role as 'admin' | 'user';
+        this.isLoggedIn = true;
+        return response;
+      } catch (error) {
+        console.error('Login failed:', error);
+        throw error;
+      }
+    },
+    async register(username: string, password: string) {
+      try {
+        const response = await register(username, password);
+        return response;
+      } catch (error) {
+        console.error('Registration failed:', error);
+        throw error;
+      }
     },
     logout() {
+      localStorage.removeItem('auth_token');
       this.user = null;
       this.role = 'user';
       this.isLoggedIn = false;
+    },
+    async checkAuth() {
+      try {
+        const token = localStorage.getItem('auth_token');
+        if (!token) {
+          this.isLoggedIn = false;
+          return false;
+        }
+        const user = await getCurrentUser();
+        this.user = user;
+        this.role = user.role as 'admin' | 'user';
+        this.isLoggedIn = true;
+        return true;
+      } catch (error) {
+        console.error('Auth check failed:', error);
+        this.logout();
+        return false;
+      }
     },
   },
 });
