@@ -1,5 +1,13 @@
 import { defineStore } from 'pinia';
+import {
+  getBaselines, createBaseline, deleteBaseline,
+  getEvaluations, createEvaluation, deleteEvaluation,
+  archiveEvaluation, getStandards, seedData
+} from '@/services';
 
+// ─────────────────────────────────────────────
+// Auth Store
+// ─────────────────────────────────────────────
 export const useAuthStore = defineStore('auth', {
   state: () => ({
     user: null as any,
@@ -20,6 +28,9 @@ export const useAuthStore = defineStore('auth', {
   },
 });
 
+// ─────────────────────────────────────────────
+// Model Store
+// ─────────────────────────────────────────────
 export const useModelStore = defineStore('models', {
   state: () => ({
     models: [
@@ -51,16 +62,20 @@ export const useModelStore = defineStore('models', {
   },
 });
 
+// ─────────────────────────────────────────────
+// Knowledge Store
+// ─────────────────────────────────────────────
 export const useKnowledgeStore = defineStore('knowledge', {
   state: () => ({
     searchQuery: '',
     activeTab: 'standards' as 'standards' | 'baselines',
     categories: [
-      { id: 1, name: '国际标准', type: 'default', files: [{ id: 101, name: 'ISO-29119.pdf', status: 'enabled', desc: '软件测试国际标准，涵盖测试过程、文档、技术等。' }] },
-      { id: 2, name: '公司标准', type: 'default', files: [{ id: 201, name: 'Company-QA-Standard.docx', status: 'enabled', desc: '公司内部质量保证体系，包含需求评审规范。' }] },
-      { id: 3, name: '项目组标准', type: 'default', files: [{ id: 301, name: 'Project-A-Reqs.txt', status: 'enabled', desc: '项目组特定需求编写建议与检查清单。' }] },
+      { id: 1, name: '国际标准', type: 'default', files: [] as any[] },
+      { id: 2, name: '公司标准', type: 'default', files: [] as any[] },
+      { id: 3, name: '项目组标准', type: 'default', files: [] as any[] },
       { id: 4, name: '自定义文档', type: 'user', files: [] as any[] },
     ],
+    isLoaded: false,
     userDefinedFiles: [] as { id: number; name: string; status: string; desc?: string }[],
     selectedFiles: [] as number[],
     selectedUserFiles: [] as number[],
@@ -92,6 +107,18 @@ export const useKnowledgeStore = defineStore('knowledge', {
     }
   },
   actions: {
+    async fetchStandards() {
+      if (this.isLoaded) return;
+      try {
+        const standards = await getStandards();
+        if (standards && standards.length > 0) {
+          this.categories = standards;
+        }
+        this.isLoaded = true;
+      } catch (e) {
+        console.error('[KnowledgeStore] fetchStandards failed:', e);
+      }
+    },
     toggleFile(id: number, isUserFile = false) {
       const list = isUserFile ? this.selectedUserFiles : this.selectedFiles;
       const index = list.indexOf(id);
@@ -142,29 +169,23 @@ export const useKnowledgeStore = defineStore('knowledge', {
   },
 });
 
+// ─────────────────────────────────────────────
+// Baseline Store
+// ─────────────────────────────────────────────
 export const useBaselineStore = defineStore('baseline', {
   state: () => ({
     searchQuery: '',
+    /**
+     * 基准需求按分类组织。
+     * 初始 files 为空，通过 fetchBaselines() 从 service 层加载。
+     * 在 MOCK 模式下，service 提供 SEED_BASELINES 数据；
+     * 在 REAL 模式下，service 调用 GET /api/baselines。
+     */
     categories: [
-      { id: 1, name: '系统默认基准', type: 'default', files: [
-        { 
-          id: 1001, 
-          name: '电商核心交易基准需求', 
-          version: 'V1.0', 
-          author: '管理员', 
-          date: '2024-01-15', 
-          score: 92, 
-          refCount: 45, 
-          scope: 'public', 
-          status: 'enabled', 
-          desc: '公司级核心交易链路基准文档。',
-          parent_base_id: null,
-          is_latest: true,
-          full_content: '这是电商核心交易基准需求V1.0的完整内容...'
-        }
-      ] },
+      { id: 1, name: '系统默认基准', type: 'default', files: [] as any[] },
       { id: 2, name: '用户归档基准', type: 'user', files: [] as any[] },
     ],
+    isLoaded: false,
   }),
   getters: {
     allFiles(state) {
@@ -195,71 +216,98 @@ export const useBaselineStore = defineStore('baseline', {
     }
   },
   actions: {
-    addBaseline(file: any, categoryId: number = 2) {
-      const cat = this.categories.find(c => c.id === categoryId);
-      if (cat) {
-        let version = file.version || 'V1.0';
-        
-        // Auto-increment version if it's a child baseline
-        if (file.parent_base_id) {
-          const siblings = this.allFiles.filter(f => 
-            f.parent_base_id === file.parent_base_id || f.id === file.parent_base_id
-          );
-          if (siblings.length > 0) {
-            // Simple version parser: V1.0 -> 1.0
-            const maxVer = siblings.reduce((max, f) => {
-              const v = parseFloat(f.version.replace(/[^0-9.]/g, ''));
-              return v > max ? v : max;
-            }, 0);
-            version = `V${(maxVer + 0.1).toFixed(1)}`;
+    /**
+     * 从 service 层加载初始基准需求数据。
+     * 在 mock 模式下返回 SEED_BASELINES；在真实模式下调用 GET /api/baselines。
+     */
+    async fetchBaselines() {
+      if (this.isLoaded) return;
+      try {
+        const baselines = await getBaselines();
+        // 将数据按 categoryType 分发到对应分类
+        const defaultCat = this.categories.find(c => c.id === 1);
+        const userCat = this.categories.find(c => c.id === 2);
+        baselines.forEach(b => {
+          if (b.categoryType === 'default' || b.scope === 'public') {
+            defaultCat?.files.push(b);
+          } else {
+            userCat?.files.push(b);
           }
-        }
-
-        const newBaseline = {
-          ...file,
-          id: Date.now(),
-          version: version,
-          author: '当前用户',
-          date: new Date().toISOString().split('T')[0],
-          refCount: 0,
-          status: 'enabled',
-          parent_base_id: file.parent_base_id || null,
-          is_latest: true,
-          full_content: file.full_content || ''
-        };
-
-        // If it's a new version, update the old latest
-        if (newBaseline.parent_base_id) {
-          this.categories.forEach(c => {
-            c.files.forEach(f => {
-              if (f.parent_base_id === newBaseline.parent_base_id || f.id === newBaseline.parent_base_id) {
-                f.is_latest = false;
-              }
-            });
-          });
-        }
-
-        cat.files.unshift(newBaseline);
+        });
+        this.isLoaded = true;
+      } catch (e) {
+        console.error('[BaselineStore] fetchBaselines failed:', e);
       }
     },
+
+    /**
+     * 归档基准需求（调用 service 层，同步更新本地状态）
+     */
+    async addBaseline(file: any, categoryId: number = 2) {
+      try {
+        const newBaseline = await createBaseline({
+          name: file.name || '未命名基准',
+          title: file.title || '未命名需求',
+          desc: file.desc || '由评估报告归档生成的基准需求文档。',
+          score: file.score || 0,
+          scope: file.scope || 'private',
+          parent_base_id: file.parent_base_id || null,
+          full_content: file.full_content || '',
+        });
+
+        const cat = this.categories.find(c => c.id === categoryId);
+        if (cat) {
+          // 更新旧版本的 is_latest 标记
+          if (newBaseline.parent_base_id) {
+            this.categories.forEach(c => {
+              c.files.forEach(f => {
+                if (f.parent_base_id === newBaseline.parent_base_id || f.id === newBaseline.parent_base_id) {
+                  f.is_latest = false;
+                }
+              });
+            });
+          }
+          cat.files.unshift(newBaseline);
+        }
+        return newBaseline;
+      } catch (e) {
+        console.error('[BaselineStore] addBaseline failed:', e);
+        throw e;
+      }
+    },
+
     updateStatus(fileId: number, status: 'enabled' | 'disabled') {
       this.categories.forEach(cat => {
         const file = cat.files.find(f => f.id === fileId);
         if (file) file.status = status;
       });
     },
-    removeBaseline(fileId: number) {
-      this.categories.forEach(cat => {
-        cat.files = cat.files.filter(f => f.id !== fileId && f.parent_base_id !== fileId);
-      });
+
+    /**
+     * 删除基准需求（调用 service 层，同步更新本地状态）
+     */
+    async removeBaseline(fileId: number) {
+      try {
+        await deleteBaseline(fileId);
+        this.categories.forEach(cat => {
+          cat.files = cat.files.filter(f => f.id !== fileId && f.parent_base_id !== fileId);
+        });
+      } catch (e) {
+        console.error('[BaselineStore] removeBaseline failed:', e);
+        throw e;
+      }
     }
   }
 });
 
+// ─────────────────────────────────────────────
+// Evaluation Store
+// ─────────────────────────────────────────────
 export const useEvaluationStore = defineStore('evaluation', {
   state: () => ({
     currentStep: 1,
     requirementType: 'text' as 'text' | 'document',
+    requirementTitle: '',
     projectName: '',
     textContent: '',
     uploadedFile: null as any,
@@ -270,46 +318,22 @@ export const useEvaluationStore = defineStore('evaluation', {
     evaluationProgress: 0,
     currentReport: null as any,
     onlyEvaluateNew: false,
-    history: [
-      { 
-        id: 1, 
-        projectName: '电商系统',
-        title: '电商系统订单模块需求', 
-        total_score: 85, 
-        increment_score: 88,
-        consistency_score: 90,
-        date: '2024-05-20', 
-        model: 'GPT-4o', 
-        standards: ['ISO-29119', '公司标准'], 
-        hasReference: true, 
-        references: ['电商核心交易基准需求'],
-        parent_base_id: 1001,
-        version: 'V1.1',
-        task_type: 'incremental',
-        is_archived: false
-      },
-      { 
-        id: 2, 
-        projectName: '用户中心',
-        title: '用户中心权限管理V2', 
-        total_score: 62, 
-        date: '2024-05-18', 
-        model: 'Claude 3.5', 
-        standards: ['项目组标准'], 
-        hasReference: false,
-        task_type: 'full',
-        is_archived: false
-      },
-    ],
+    /**
+     * 评估历史记录。
+     * 初始为空，通过 fetchHistory() 从 service 层加载。
+     * 在 MOCK 模式下返回 SEED_EVALUATIONS；在真实模式下调用 GET /api/evaluations。
+     */
+    history: [] as any[],
+    isHistoryLoaded: false,
   }),
   getters: {
     aggregatedHistory(state) {
       const baselineStore = useBaselineStore();
       const baselines = baselineStore.baselineTree;
-      
+
       const grouped = {} as Record<string, any[]>;
       const independent = [] as any[];
-      
+
       state.history.forEach(item => {
         if (item.parent_base_id) {
           const pid = item.parent_base_id.toString();
@@ -319,55 +343,42 @@ export const useEvaluationStore = defineStore('evaluation', {
           independent.push(item);
         }
       });
-      
-      // Map history to the correct baseline version structure
+
       const tree = baselines.map(base => {
-        // Collect all history items that belong to this baseline family (any version)
-        // Use Set to avoid duplicates if base.id is also in versions (which shouldn't happen but safe to guard)
         const familyIds = new Set([base.id, ...base.versions.map((v: any) => v.id)]);
         let familyHistory: any[] = [];
-        
+
         familyIds.forEach(fid => {
-           if (grouped[fid.toString()]) {
-             familyHistory = familyHistory.concat(grouped[fid.toString()]);
-           }
+          if (grouped[fid.toString()]) {
+            familyHistory = familyHistory.concat(grouped[fid.toString()]);
+          }
         });
 
-        // Sort: parent first, then by version descending
         familyHistory.sort((a, b) => {
-           // Parent item comes first
-           if (a.id === base.id) return -1;
-           if (b.id === base.id) return 1;
-           // Then sort by version descending
-           const vA = parseFloat(a.version.replace(/[^0-9.]/g, ''));
-           const vB = parseFloat(b.version.replace(/[^0-9.]/g, ''));
-           return vB - vA;
+          if (a.id === base.id) return -1;
+          if (b.id === base.id) return 1;
+          const vA = parseFloat(a.version?.replace(/[^0-9.]/g, '') || '0');
+          const vB = parseFloat(b.version?.replace(/[^0-9.]/g, '') || '0');
+          return vB - vA;
         });
 
-        return {
-          ...base,
-          history: familyHistory
-        };
+        return { ...base, history: familyHistory };
       });
-      
-      // Group independent (unarchived) tasks by projectName
+
       const independentGrouped = independent.filter(i => !i.is_archived).reduce((groups: Record<string, any[]>, item) => {
         const projectName = item.projectName || '未命名项目';
-        if (!groups[projectName]) {
-          groups[projectName] = [];
-        }
+        if (!groups[projectName]) groups[projectName] = [];
         groups[projectName].push(item);
         return groups;
       }, {});
-      
-      // Convert grouped object to array and sort by project name
-      const independentByProject = Object.entries(independentGrouped)
+
+      const independentByProject = (Object.entries(independentGrouped) as [string, any[]][])
         .map(([projectName, items]) => ({
           projectName,
-          items: items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+          items: (items as any[]).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
         }))
         .sort((a, b) => a.projectName.localeCompare(b.projectName));
-      
+
       return {
         baselines: tree,
         independent: independent.filter(i => !i.is_archived),
@@ -376,28 +387,44 @@ export const useEvaluationStore = defineStore('evaluation', {
     }
   },
   actions: {
+    /**
+     * 从 service 层加载历史评估记录
+     */
+    async fetchHistory() {
+      if (this.isHistoryLoaded) return;
+      try {
+        const evaluations = await getEvaluations();
+        this.history = evaluations;
+        this.isHistoryLoaded = true;
+      } catch (e) {
+        console.error('[EvaluationStore] fetchHistory failed:', e);
+      }
+    },
+
     setStep(step: number) {
       this.currentStep = step;
     },
+
     toggleBaseline(id: number) {
       const index = this.referencedBaselineIds.indexOf(id);
       if (index > -1) {
         this.referencedBaselineIds.splice(index, 1);
       } else {
-        // Only allow one baseline for incremental evaluation as per requirements
         this.referencedBaselineIds = [id];
       }
-      
       if (this.referencedBaselineIds.length === 0) {
         this.onlyReference = false;
       }
     },
+
     clearBaselines() {
       this.referencedBaselineIds = [];
       this.onlyReference = false;
     },
+
     reset() {
       this.projectName = '';
+      this.requirementTitle = '';
       this.textContent = '';
       this.uploadedFile = null;
       this.referencedBaselineIds = [];
@@ -407,50 +434,55 @@ export const useEvaluationStore = defineStore('evaluation', {
       this.currentStep = 1;
       this.onlyEvaluateNew = false;
     },
-    addHistory(report: any) {
+
+    /**
+     * 将评估报告写入历史记录（调用 service 层）
+     */
+    async addHistory(report: any) {
       const baselineStore = useBaselineStore();
       const references = this.referencedBaselineIds.map(id => {
         const f = baselineStore.allFiles.find(bf => bf.id === id);
         return f ? f.name : '';
       }).filter(n => n);
 
-      const parentBase = this.referencedBaselineIds.length > 0 ? 
-        baselineStore.allFiles.find(f => f.id === this.referencedBaselineIds[0]) : null;
-      
-      const projectName = this.referencedBaselineIds.length > 0 ? parentBase?.name : this.projectName || '未命名项目';
-      
-      // Find existing unarchived tasks for the same project
-      const existingUnarchived = this.history.filter(item => 
-        item.projectName === projectName && 
-        !item.is_archived && 
+      const parentBase = this.referencedBaselineIds.length > 0
+        ? baselineStore.allFiles.find(f => f.id === this.referencedBaselineIds[0])
+        : null;
+
+      const projectName = this.referencedBaselineIds.length > 0
+        ? parentBase?.name
+        : this.projectName || '未命名项目';
+
+      // 找同项目下已有的未归档记录，计算版本号
+      const existingUnarchived = this.history.filter(item =>
+        item.projectName === projectName &&
+        !item.is_archived &&
         !item.parent_base_id
       );
-      
-      // Calculate next version number
+
       let version = 'V1.0';
       if (parentBase) {
-        // For incremental tasks, increment from parent base version
         version = `V${(parseFloat(parentBase.version.replace('V', '')) + 0.1).toFixed(1)}`;
       } else if (existingUnarchived.length > 0) {
-        // For same project, increment from the latest version
         const latestVersion = existingUnarchived.reduce((max, item) => {
-          const v = parseFloat(item.version.replace('V', ''));
+          const v = parseFloat(item.version?.replace('V', '') || '0');
           return v > max ? v : max;
         }, 0);
         version = `V${(latestVersion + 0.1).toFixed(1)}`;
-        
-        // Remove existing unarchived tasks for the same project
-        this.history = this.history.filter(item => 
-          !(item.projectName === projectName && 
-            !item.is_archived && 
+
+        // 移除同项目旧的未归档记录（在本地，不删除服务端数据）
+        this.history = this.history.filter(item =>
+          !(item.projectName === projectName &&
+            !item.is_archived &&
             !item.parent_base_id)
         );
       }
 
-      this.history.unshift({
-        id: Date.now(),
-        projectName: projectName,
-        title: this.requirementType === 'document' ? this.uploadedFile.name : (this.requirementTitle || this.textContent.slice(0, 15) + '...'),
+      const newRecord = {
+        projectName,
+        title: this.requirementType === 'document'
+          ? this.uploadedFile?.name
+          : (this.requirementTitle || this.textContent.slice(0, 15) + '...'),
         total_score: report.total_score || report.score,
         date: new Date().toISOString().split('T')[0],
         model: 'GPT-4o',
@@ -460,8 +492,20 @@ export const useEvaluationStore = defineStore('evaluation', {
         parent_base_id: parentBase ? parentBase.id : null,
         task_type: references.length > 0 ? 'incremental' : 'full',
         is_archived: false,
-        version: version
-      });
+        version,
+        issues: report.issues || [],
+        suggestions: report.suggestions || '',
+      };
+
+      try {
+        // 通过 service 层持久化（mock 写入内存，real 发 POST 请求）
+        const saved = await createEvaluation(newRecord);
+        this.history.unshift(saved);
+      } catch (e) {
+        // 降级：本地写入（避免 UI 中断）
+        console.warn('[EvaluationStore] createEvaluation failed, using local fallback:', e);
+        this.history.unshift({ ...newRecord, id: Date.now() });
+      }
     }
   }
 });

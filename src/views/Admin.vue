@@ -380,7 +380,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive } from 'vue';
+import { ref, computed, reactive, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore, useModelStore, useKnowledgeStore, useBaselineStore } from '@/store';
 import { 
@@ -413,6 +413,13 @@ const editingModel = reactive({
   apiKey: '',
   status: 'available',
   baseUrl: ''
+});
+
+onMounted(async () => {
+  await Promise.all([
+    baselineStore.fetchBaselines(),
+    knowledgeStore.fetchStandards()
+  ]);
 });
 
 const menuItems = reactive([

@@ -490,7 +490,7 @@
                   :key="i"
                   class="p-4 bg-red-50/30 border-l-4 border-red-400 rounded-r-xl flex gap-3"
                 >
-                  <span class="text-red-500 font-bold">0{{ i+1 }}</span>
+                  <span class="text-red-500 font-bold">0{{ Number(i)+1 }}</span>
                   <p class="text-sm text-gray-700 leading-relaxed">{{ issue }}</p>
                 </div>
               </div>
@@ -660,9 +660,8 @@
 
                   <!-- Child Items -->
                   <div 
-                    v-for="(history, index) in project.items" 
+                    v-for="history in project.items.slice(1)" 
                     :key="history.id"
-                    v-if="index > 0"
                     class="bg-white p-5 rounded-lg shadow-sm border border-gray-100 hover:border-blue-300 hover:shadow-md transition-all duration-300 cursor-pointer group relative"
                     :class="isHistoryReferenced(history) ? 'border-blue-400 bg-blue-50/30 ring-1 ring-blue-100' : ''"
                     @click="loadHistory(history)"
@@ -915,6 +914,7 @@ import {
   View, Close, CollectionTag, DocumentChecked
 } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { startEvaluation, getEvaluationStatus, archiveEvaluation, cancelEvaluationMock } from '@/services';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -922,6 +922,15 @@ const knowledgeStore = useKnowledgeStore();
 const evalStore = useEvaluationStore();
 const modelStore = useModelStore();
 const baselineStore = useBaselineStore();
+
+// 初始化：从 service 层通过 store 加载初始数据
+onMounted(async () => {
+  await Promise.all([
+    baselineStore.fetchBaselines(),
+    evalStore.fetchHistory(),
+    knowledgeStore.fetchStandards(),
+  ]);
+});
 
 // Automatically reset onlyReference if no baselines are selected
 watch(() => evalStore.referencedBaselineIds.length, (newLength) => {
@@ -1042,27 +1051,31 @@ const openArchiveDialog = (historyItem?: any) => {
     ? (baselineStore.allFiles.find(f => f.id === (evalStore.referencedBaselineIds[0] || target.parent_base_id))?.name)
     : (evalStore.uploadedFile?.name || '新基准需求文档'));
 
-  const performArchive = (name: string) => {
+  const performArchive = async (name: string) => {
     const parentId = evalStore.referencedBaselineIds[0] || target.parent_base_id;
     // 对于历史记录，使用历史记录的标题作为需求标题
     const requirementTitle = historyItem ? historyItem.title : evalStore.requirementTitle;
-    baselineStore.addBaseline({
-      name: name || '未命名基准',
-      title: requirementTitle || '未命名需求',
-      desc: '由评估报告归档生成的基准需求文档。',
-      score: target.total_score || target.score,
-      scope: 'private',
-      parent_base_id: parentId,
-      full_content: evalStore.textContent // In real app, this would be merged content
-    });
-    
-    if (historyItem) {
-      historyItem.is_archived = true;
-    } else if (evalStore.currentReport) {
-      evalStore.currentReport.is_archived = true;
-    }
+    try {
+      await baselineStore.addBaseline({
+        name: name || '未命名基准',
+        title: requirementTitle || '未命名需求',
+        desc: '由评估报告归档生成的基准需求文档。',
+        score: target.total_score || target.score,
+        scope: 'private',
+        parent_base_id: parentId,
+        full_content: evalStore.textContent
+      });
 
-    ElMessage.success('已成功归档至基准需求库');
+      if (historyItem) {
+        historyItem.is_archived = true;
+      } else if (evalStore.currentReport) {
+        evalStore.currentReport.is_archived = true;
+      }
+
+      ElMessage.success('已成功归档至基准需求库');
+    } catch (e: any) {
+      ElMessage.error(`归档失败：${e.message || '未知错误'}`);
+    }
   };
 
   // 直接使用项目名称归档，不再弹出输入框
@@ -1195,54 +1208,85 @@ const handleReqFileUpload = (file: any) => {
   ElMessage.success('需求文档上传成功');
 };
 
-let evaluationInterval: any = null;
+// 当前正在进行的评估任务 ID（用于轮询和取消）
+let _currentEvaluationId: number | null = null;
+let _pollingTimer: ReturnType<typeof setTimeout> | null = null;
 
-const handleStartEvaluation = () => {
+/**
+ * 处理「开始评估」按钮点击。
+ * 1. 调用 service.startEvaluation() 提交评估任务（mock: 不发真实请求；real: POST /api/evaluations）
+ * 2. 启动轮询 getEvaluationStatus() 更新进度条
+ * 3. 完成时解析 report 并写入 store
+ */
+const handleStartEvaluation = async () => {
   evalStore.isEvaluating = true;
   evalStore.evaluationProgress = 0;
-  
-  evaluationInterval = setInterval(() => {
-    evalStore.evaluationProgress += Math.floor(Math.random() * 10) + 5;
-    if (evalStore.evaluationProgress >= 100) {
-      evalStore.evaluationProgress = 100;
-      clearInterval(evaluationInterval);
-      evaluationInterval = null;
-      finishEvaluation();
-    }
-  }, 200);
+
+  try {
+    const payload = {
+      project_name: evalStore.projectName,
+      requirement_title: evalStore.requirementTitle,
+      requirement_type: evalStore.requirementType,
+      text_content: evalStore.requirementType === 'text' ? evalStore.textContent : undefined,
+      document_file_id: evalStore.requirementType === 'document' ? evalStore.uploadedFile?.file_id : undefined,
+      standard_ids: knowledgeStore.allSelectedFiles.map((f: any) => f.id),
+      referenced_baseline_id: evalStore.referencedBaselineIds[0] || null,
+      only_evaluate_new: evalStore.onlyEvaluateNew,
+      instructions: evalStore.instructions || undefined,
+    };
+
+    const { evaluation_id } = await startEvaluation(payload);
+    _currentEvaluationId = evaluation_id;
+    pollEvaluationStatus(evaluation_id);
+  } catch (e: any) {
+    evalStore.isEvaluating = false;
+    ElMessage.error(`评估启动失败：${e.message || '未知错误'}`);
+  }
 };
 
-const cancelEvaluation = () => {
-  if (evaluationInterval) {
-    clearInterval(evaluationInterval);
-    evaluationInterval = null;
+/**
+ * 轮询评估任务状态，每 300ms 查询一次直至完成或取消。
+ */
+const pollEvaluationStatus = (id: number) => {
+  _pollingTimer = setTimeout(async () => {
+    if (!evalStore.isEvaluating) return; // 已被取消
+    try {
+      const result = await getEvaluationStatus(id);
+      evalStore.evaluationProgress = Math.min(result.progress, 99);
+
+      if (result.status === 'completed' && result.report) {
+        evalStore.evaluationProgress = 100;
+        await finishEvaluation(result.report);
+      } else {
+        pollEvaluationStatus(id); // 继续轮询
+      }
+    } catch (e) {
+      pollEvaluationStatus(id); // 网络抖动，继续重试
+    }
+  }, 300);
+};
+
+const cancelEvaluation = async () => {
+  if (_pollingTimer) { clearTimeout(_pollingTimer); _pollingTimer = null; }
+  if (_currentEvaluationId) {
+    await cancelEvaluationMock(_currentEvaluationId).catch(() => {});
+    _currentEvaluationId = null;
   }
   evalStore.isEvaluating = false;
   evalStore.evaluationProgress = 0;
   ElMessage.info('评估已取消');
 };
 
-const finishEvaluation = () => {
-  setTimeout(() => {
-    evalStore.isEvaluating = false;
-    const isIncremental = evalStore.referencedBaselineIds.length > 0;
-    
-    evalStore.currentReport = {
-      total_score: Math.floor(Math.random() * 20) + 75,
-      task_type: isIncremental ? 'incremental' : 'full',
-      parent_base_id: evalStore.referencedBaselineIds[0] || null,
-      issues: [
-        '需求 ID: REQ-001 描述中存在二义性词汇（如"尽快响应"），缺乏具体的毫秒级性能指标。',
-        '需求 ID: REQ-004 缺乏明确的输入边界值定义，未说明超过 10000 条记录时的处理逻辑。',
-        '部分功能点（用户注销流程）未描述异常中断时的回滚机制，导致测试用例无法覆盖容错性。',
-        '安全需求描述过于笼统（"保证数据安全"），未指明具体的加密算法或访问控制级别。'
-      ],
-      suggestions: '建议针对性能需求补充具体的 SLA 指标；对所有输入项增加边界值说明；补充异常流程的分支描述。同时，建议将安全需求细化为身份认证、数据加密和权限控制三个子项。'
-    };
-    evalStore.addHistory(evalStore.currentReport);
-    evalStore.setStep(4);
-    ElMessage.success('评估完成！');
-  }, 500);
+/**
+ * 评估完成后的处理：解析 report，写入 store，跳转步骤 4。
+ * report 数据来自 service 层（mock: 本地生成；real: 后端返回）
+ */
+const finishEvaluation = async (report: any) => {
+  evalStore.isEvaluating = false;
+  evalStore.currentReport = report;
+  await evalStore.addHistory(report);
+  evalStore.setStep(4);
+  ElMessage.success('评估完成！');
 };
 
 const getScoreColor = (score: number) => {
@@ -1257,9 +1301,37 @@ const getScoreType = (score: number) => {
   return 'danger';
 };
 
-const loadHistory = (history: any) => {
+const loadHistory = async (history: any) => {
   ElMessage.info(`正在加载历史记录: ${history.title}`);
-  // In real app, fetch full data and populate store
+  // 如果 history 中已包含完整 report 数据（issues/suggestions），直接使用
+  if (history.issues && history.suggestions) {
+    evalStore.currentReport = {
+      total_score: history.total_score || history.score,
+      task_type: history.task_type || 'full',
+      parent_base_id: history.parent_base_id || null,
+      issues: history.issues,
+      suggestions: history.suggestions,
+      is_archived: history.is_archived,
+    };
+    evalStore.setStep(4);
+    return;
+  }
+  // 否则通过 service 层获取详情（real 模式: GET /api/evaluations/{id}）
+  try {
+    const { getEvaluationDetail } = await import('@/services');
+    const detail = await getEvaluationDetail(history.id);
+    evalStore.currentReport = {
+      total_score: detail.total_score || detail.score,
+      task_type: detail.task_type || 'full',
+      parent_base_id: detail.parent_base_id || null,
+      issues: detail.issues || [],
+      suggestions: detail.suggestions || '',
+      is_archived: detail.is_archived,
+    };
+    evalStore.setStep(4);
+  } catch (e: any) {
+    ElMessage.error(`加载历史记录失败：${e.message}`);
+  }
 };
 
 const openBaselineDrawer = () => {
@@ -1435,23 +1507,26 @@ const archiveAllProjectTasks = (project: any) => {
       cancelButtonText: '取消',
       type: 'success'
     }
-  ).then(() => {
-    // 归档项目下的所有需求
-    project.items.forEach((item: any) => {
+  ).then(async () => {
+    // 归档项目下的所有需求（async，逐个调用 service）
+    for (const item of project.items) {
       if (!item.is_archived) {
-        baselineStore.addBaseline({
-          name: baselineName,
-          title: item.title || '未命名需求',
-          desc: '由评估报告归档生成的基准需求文档。',
-          score: item.total_score || item.score,
-          scope: 'private',
-          parent_base_id: null,
-          full_content: item.content || ''
-        });
-        item.is_archived = true;
+        try {
+          await baselineStore.addBaseline({
+            name: baselineName,
+            title: item.title || '未命名需求',
+            desc: '由评估报告归档生成的基准需求文档。',
+            score: item.total_score || item.score,
+            scope: 'private',
+            parent_base_id: null,
+            full_content: item.content || ''
+          });
+          item.is_archived = true;
+        } catch (e: any) {
+          ElMessage.error(`归档失败（${item.title}）：${e.message}`);
+        }
       }
-    });
-    
+    }
     ElMessage.success(`项目 "${project.projectName}" 已成功归档为基准需求`);
   }).catch(() => {});
 };
