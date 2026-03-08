@@ -76,6 +76,7 @@
 |---|---|---|---|
 | `project_name` | string | 是 | 项目名称，用于历史记录分组 |
 | `requirement_title` | string | 是 | 需求标题 |
+| `parent_category_id` | number | 否 | 所属父类 ID（基准表中的分类节点） |
 | `requirement_type` | `"text"` \| `"document"` | 是 | 需求提交类型 |
 | `text_content` | string | 条件必填 | `requirement_type=text` 时必填 |
 | `document_file_id` | number | 条件必填 | `requirement_type=document` 时必填，文件 ID 由上传接口返回 |
@@ -197,7 +198,7 @@
 
 - **Endpoint**: `POST /api/evaluations/{id}/archive`
 - **Auth**: 必须
-- **Description**: 将一次评估结果归档为可复用的基准需求文档。
+- **Description**: 将一次评估结果归档为可复用的基准需求文档。归档时会根据 `evaluations` 中的 `project_name`, `version`, `parent_category_id` 等字段自动在 `baselines` 表创建对应记录。
 - **Request Body**:
 
 ```json
