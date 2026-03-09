@@ -230,3 +230,48 @@ export const uploadRequirementFile = (file: File): Promise<{ file_id: number; na
     headers: { 'Content-Type': 'multipart/form-data' },
   });
 };
+
+// ─────────────────────────────────────────────
+// 大语言模型管理 API
+// ─────────────────────────────────────────────
+
+/**
+ * 获取所有模型配置
+ * GET /api/admin/models
+ */
+export const getModels = (): Promise<any[]> => {
+  return http.get('/api/admin/models');
+};
+
+/**
+ * 新增模型配置
+ * POST /api/admin/models
+ */
+export const createModel = (payload: any): Promise<any> => {
+  return http.post('/api/admin/models', payload);
+};
+
+/**
+ * 更新指定模型配置
+ * PUT /api/admin/models/{id}
+ */
+export const updateModel = (id: number, payload: any): Promise<any> => {
+  return http.put(`/api/admin/models/${id}`, payload);
+};
+
+/**
+ * 激活指定模型（此操作会禁用其他模型）
+ * POST /api/admin/models/{id}/activate
+ */
+export const activateModel = (id: number): Promise<any> => {
+  return http.post(`/api/admin/models/${id}/activate`);
+};
+
+/**
+ * 删除指定模型配置
+ * DELETE /api/admin/models/{id}
+ */
+export const deleteModel = (id: number): Promise<void> => {
+  return http.delete(`/api/admin/models/${id}`);
+};
+

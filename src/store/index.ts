@@ -57,29 +57,83 @@ export const useAuthStore = defineStore('auth', {
 // ─────────────────────────────────────────────
 // Model Store
 // ─────────────────────────────────────────────
+import { getModels, createModel, updateModel, activateModel, deleteModel } from '../services/api';
+
 export const useModelStore = defineStore('models', {
   state: () => ({
-    models: [
-      { id: 1, name: 'GPT-4o', provider: 'OpenAI', apiKey: 'sk-proj-1234567890abcdef', status: 'available', usageCount: 1240 },
-      { id: 2, name: 'Claude 3.5 Sonnet', provider: 'Anthropic', apiKey: 'sk-ant-api03-1234567890', status: 'available', usageCount: 856 },
-      { id: 3, name: 'Gemini 1.5 Pro', provider: 'Google', apiKey: 'AIzaSyA1234567890', status: 'available', usageCount: 432 },
-    ],
+    models: [] as any[],
+    isLoading: false,
     prompts: {
       system: '你是一个专业的软件需求测试性评估专家。请根据提供的知识库标准，对需求文档进行评估。',
       format: '评估报告应包含：1. 可测试性评分 (0-100)；2. 问题点分析；3. 改进建议。',
     },
   }),
   actions: {
-    addModel(model: any) {
-      this.models.push({ ...model, id: Date.now() });
+    async fetchModels() {
+      this.isLoading = true;
+      try {
+        const data = await getModels();
+        // 映射后端字段到前端现有的使用习惯，或者在使用处直接修改。后端有 name, provider, model_name, api_key, base_url, is_active
+        this.models = data.map((item: any) => ({
+          ...item,
+          status: item.is_active ? 'active' : 'available',
+          apiKey: item.api_key, // frontend prefers small camel case
+        }));
+      } catch (error) {
+        console.error('Failed to fetch models:', error);
+      } finally {
+        this.isLoading = false;
+      }
     },
-    removeModel(id: number) {
-      this.models = this.models.filter(m => m.id !== id);
+    async addModel(model: any) {
+      try {
+        const payload = {
+          name: model.name,
+          provider: model.provider,
+          model_name: model.model_name || model.name,
+          api_key: model.apiKey || '',
+          base_url: model.base_url || '',
+          is_active: false
+        };
+        const newModel = await createModel(payload);
+        await this.fetchModels(); // Refresh list to get accurate state
+      } catch (error) {
+        console.error('Failed to create model:', error);
+        throw error;
+      }
     },
-    updateModel(updatedModel: any) {
-      const index = this.models.findIndex(m => m.id === updatedModel.id);
-      if (index !== -1) {
-        this.models[index] = { ...updatedModel };
+    async removeModel(id: number) {
+      try {
+        await deleteModel(id);
+        await this.fetchModels(); // Refresh list
+      } catch (error) {
+        console.error('Failed to delete model:', error);
+        throw error;
+      }
+    },
+    async updateModel(updatedModel: any) {
+      try {
+        const payload = {
+          name: updatedModel.name,
+          provider: updatedModel.provider,
+          model_name: updatedModel.model_name || updatedModel.name,
+          api_key: updatedModel.apiKey || '',
+          base_url: updatedModel.base_url || '',
+        };
+        await updateModel(updatedModel.id, payload);
+        await this.fetchModels(); // Refresh list
+      } catch (error) {
+        console.error('Failed to update model:', error);
+        throw error;
+      }
+    },
+    async activateModel(id: number) {
+      try {
+        await activateModel(id);
+        await this.fetchModels(); // Refresh list to reflect single active model
+      } catch (error) {
+        console.error('Failed to activate model:', error);
+        throw error;
       }
     },
     updatePrompt(type: 'system' | 'format', value: string) {

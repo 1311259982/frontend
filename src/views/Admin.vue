@@ -68,8 +68,8 @@
                       <p class="text-xs text-gray-400">{{ model.provider }}</p>
                     </div>
                   </div>
-                  <el-tag :type="model.status === 'available' ? 'success' : 'danger'" size="small" round effect="light">
-                    {{ model.status === 'available' ? '可用' : '离线' }}
+                  <el-tag :type="model.status === 'active' ? 'success' : 'info'" size="small" round effect="light">
+                    {{ model.status === 'active' ? '当前启用' : '备用' }}
                   </el-tag>
                 </div>
                 
@@ -85,8 +85,9 @@
                 </div>
                 
                 <div class="flex gap-2 border-t border-gray-100 pt-4">
-                  <el-button size="small" class="flex-1" icon="Edit" @click="handleEdit(model)">编辑</el-button>
-                  <el-button size="small" type="danger" plain icon="Delete" @click="modelStore.removeModel(model.id)">删除</el-button>
+                  <el-button v-if="model.status !== 'active'" size="small" plain type="success" @click="handleActivateModel(model.id)">启用该模型</el-button>
+                  <el-button size="small" :class="{'flex-1': model.status === 'active'}" icon="Edit" @click="handleEdit(model)">编辑</el-button>
+                  <el-button size="small" type="danger" plain icon="Delete" @click="handleRemoveModel(model.id)">删除</el-button>
                 </div>
               </el-card>
             </el-col>
@@ -348,12 +349,6 @@
         <el-form-item label="API Key">
           <el-input v-model="editingModel.apiKey" type="password" show-password placeholder="请输入 API Key" />
         </el-form-item>
-        <el-form-item label="服务状态">
-          <el-radio-group v-model="editingModel.status">
-            <el-radio-button label="available">可用</el-radio-button>
-            <el-radio-button label="unavailable">离线</el-radio-button>
-          </el-radio-group>
-        </el-form-item>
         <el-form-item label="Base URL (可选)">
           <el-input v-model="editingModel.baseUrl" placeholder="https://api.openai.com/v1" />
         </el-form-item>
@@ -417,6 +412,7 @@ const editingModel = reactive({
 
 onMounted(async () => {
   await Promise.all([
+    modelStore.fetchModels(),
     baselineStore.fetchBaselines(),
     knowledgeStore.fetchStandards()
   ]);
@@ -496,7 +492,6 @@ const newModel = reactive({
   name: '',
   provider: 'OpenAI',
   apiKey: '',
-  status: 'available',
   baseUrl: ''
 });
 
@@ -553,10 +548,14 @@ const closeAddDialog = () => {
   showAddDialog.value = false;
 };
 
-const confirmAdd = () => {
-  modelStore.addModel({ ...newModel });
-  closeAddDialog();
-  ElMessage.success('模型添加成功');
+const confirmAdd = async () => {
+  try {
+    await modelStore.addModel({ ...newModel });
+    closeAddDialog();
+    ElMessage.success('模型添加成功');
+  } catch (err) {
+    ElMessage.error('模型添加失败');
+  }
 };
 
 const handleEdit = (model: any) => {
@@ -564,15 +563,36 @@ const handleEdit = (model: any) => {
   editingModel.name = model.name;
   editingModel.provider = model.provider;
   editingModel.apiKey = model.apiKey;
-  editingModel.status = model.status;
   editingModel.baseUrl = model.baseUrl || '';
   showEditDialog.value = true;
 };
 
-const confirmEdit = () => {
-  modelStore.updateModel({ ...editingModel });
-  showEditDialog.value = false;
-  ElMessage.success('模型配置已更新');
+const confirmEdit = async () => {
+  try {
+    await modelStore.updateModel({ ...editingModel });
+    showEditDialog.value = false;
+    ElMessage.success('模型配置已更新');
+  } catch (err) {
+    ElMessage.error('模型配置更新失败');
+  }
+};
+
+const handleActivateModel = async (id: number) => {
+  try {
+    await modelStore.activateModel(id);
+    ElMessage.success('已切换当前启用的模型');
+  } catch (err) {
+    ElMessage.error('模型切换失败');
+  }
+};
+
+const handleRemoveModel = async (id: number) => {
+  try {
+    await modelStore.removeModel(id);
+    ElMessage.success('已删除模型');
+  } catch (err) {
+    ElMessage.error('删除模型失败');
+  }
 };
 
 const savePrompt = (type: 'system' | 'format') => {
