@@ -8,25 +8,51 @@ import {
 // ─────────────────────────────────────────────
 // Auth Store
 // ─────────────────────────────────────────────
+import { login as apiLogin, register as apiRegister } from '@/services/api';
+
+// 从 localStorage 恢复初始状态
+const _storedToken = localStorage.getItem('auth_token');
+const _storedUser = (() => {
+  try { return JSON.parse(localStorage.getItem('auth_user') || 'null'); } catch { return null; }
+})();
+
 export const useAuthStore = defineStore('auth', {
   state: () => ({
-    user: null as any,
-    role: 'user' as 'admin' | 'user',
-    isLoggedIn: false,
+    token: _storedToken as string | null,
+    user: _storedUser as { id: number; username: string; role: string } | null,
+    isLoggedIn: !!_storedToken,
+    role: (_storedUser?.role || 'user') as 'admin' | 'user',
   }),
   actions: {
-    login(username: string, role: 'admin' | 'user') {
-      this.user = { username };
-      this.role = role;
+    async login(username: string, password: string) {
+      const res = await apiLogin(username, password);
+      this.token = res.token;
+      this.user = res.user;
+      this.role = res.user.role as 'admin' | 'user';
       this.isLoggedIn = true;
+      localStorage.setItem('auth_token', res.token);
+      localStorage.setItem('auth_user', JSON.stringify(res.user));
+    },
+    async register(username: string, password: string) {
+      const res = await apiRegister(username, password);
+      this.token = res.token;
+      this.user = res.user;
+      this.role = res.user.role as 'admin' | 'user';
+      this.isLoggedIn = true;
+      localStorage.setItem('auth_token', res.token);
+      localStorage.setItem('auth_user', JSON.stringify(res.user));
     },
     logout() {
+      this.token = null;
       this.user = null;
       this.role = 'user';
       this.isLoggedIn = false;
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('auth_user');
     },
   },
 });
+
 
 // ─────────────────────────────────────────────
 // Model Store
@@ -257,7 +283,8 @@ export const useBaselineStore = defineStore('baseline', {
 
         const cat = this.categories.find(c => c.id === categoryId);
         if (cat) {
-          // 更新旧版本的 is_latest 标记
+          // 在真实场景下，其实重新 fetchBaselines 刷新即可，这里保留简单的 UI 同步
+          // 更新旧版本的 is_latest 标记（前端展示用）
           if (newBaseline.parent_base_id) {
             this.categories.forEach(c => {
               c.files.forEach(f => {
@@ -498,9 +525,11 @@ export const useEvaluationStore = defineStore('evaluation', {
       };
 
       try {
-        // 通过 service 层持久化（mock 写入内存，real 发 POST 请求）
-        const saved = await createEvaluation(newRecord);
-        this.history.unshift(saved);
+        // MOCK 环境下会走 createEvaluation 新增记录；REAL 环境下后端在完成评估时自动在 evaluations 表落地记录，不需要手动 POST `createEvaluation`。
+        // 为了两端兼容，我们实际上只需在评估完成后调用一次 fetchHistory() 刷新列表即可。
+        // 这里的代码保留了 mock 环境的回退方案：
+        await createEvaluation(newRecord);
+        await this.fetchHistory(); // 请求服务器更新历史列表
       } catch (e) {
         // 降级：本地写入（避免 UI 中断）
         console.warn('[EvaluationStore] createEvaluation failed, using local fallback:', e);

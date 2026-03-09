@@ -26,18 +26,24 @@ const router = createRouter({
 
 router.beforeEach((to, from, next) => {
   const authStore = useAuthStore();
-  if (to.meta.requiresAuth && !authStore.isLoggedIn) {
-    next('/login');
-  } else if (to.meta.role && authStore.role !== to.meta.role && to.meta.role !== 'user') {
-    // Basic role check, user can access home, admin needs admin role
-    if (to.meta.role === 'admin' && authStore.role !== 'admin') {
-      next('/');
-    } else {
-      next();
-    }
-  } else {
-    next();
+  const isAuthenticated = !!authStore.token;
+
+  // Already logged in and trying to reach /login → redirect to appropriate home
+  if (to.path === '/login' && isAuthenticated) {
+    return next(authStore.role === 'admin' ? '/admin' : '/');
   }
+
+  if (to.meta.requiresAuth && !isAuthenticated) {
+    return next('/login');
+  }
+
+  // Admin-only route: redirect non-admins to user home
+  if (to.meta.role === 'admin' && authStore.role !== 'admin') {
+    return next('/');
+  }
+
+  next();
 });
+
 
 export default router;

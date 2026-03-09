@@ -239,25 +239,13 @@ export const getBaselines = async (): Promise<any[]> => {
     return [..._baselines];
 };
 
-/**
- * 创建（归档）基准需求
- */
 export const createBaseline = async (payload: CreateBaselinePayload): Promise<any> => {
     await delay(300);
 
-    let version = payload.parent_base_id ? 'V1.0' : 'V1.0';
+    // MOCK 模拟后端的版本号计算分配（简单的 V1.0 或者自增），不需要像旧版那么复杂
+    let version = payload.parent_base_id ? 'V1.1' : 'V1.0';
     if (payload.parent_base_id) {
-        const siblings = _baselines.filter(
-            f => f.parent_base_id === payload.parent_base_id || f.id === payload.parent_base_id
-        );
-        if (siblings.length > 0) {
-            const maxVer = siblings.reduce((max, f) => {
-                const v = parseFloat(f.version.replace(/[^0-9.]/g, ''));
-                return v > max ? v : max;
-            }, 0);
-            version = `V${(maxVer + 0.1).toFixed(1)}`;
-        }
-        // 旧版本标记为非最新
+        // 旧版本标记为非最新（仅做简单的 mock 级处理）
         _baselines.forEach(f => {
             if (f.parent_base_id === payload.parent_base_id || f.id === payload.parent_base_id) {
                 f.is_latest = false;

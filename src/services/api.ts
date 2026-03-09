@@ -29,14 +29,50 @@ http.interceptors.request.use((config) => {
   return config;
 });
 
-// 响应拦截器：统一错误处理
+// 响应拦截器：统一错误处理（支持后端 detail.message 中文错误信息）
 http.interceptors.response.use(
   (response) => response.data,
   (error) => {
-    const message = error.response?.data?.message || error.message || '网络请求失败';
+    const detail = error.response?.data?.detail;
+    const message =
+      (typeof detail === 'object' ? detail?.message : detail) ||
+      error.message ||
+      '网络请求失败';
     return Promise.reject(new Error(message));
   }
 );
+
+// ─────────────────────────────────────────────
+// 认证相关类型 & API
+// ─────────────────────────────────────────────
+export interface AuthUserInfo {
+  id: number;
+  username: string;
+  role: string;
+}
+
+export interface AuthResponse {
+  token: string;
+  user: AuthUserInfo;
+}
+
+/**
+ * 用户登录
+ * POST /api/auth/login
+ */
+export const login = (username: string, password: string): Promise<AuthResponse> => {
+  return http.post('/api/auth/login', { username, password });
+};
+
+/**
+ * 用户注册（默认角色 user）
+ * POST /api/auth/register
+ */
+export const register = (username: string, password: string): Promise<AuthResponse> => {
+  return http.post('/api/auth/register', { username, password });
+};
+
+
 
 // ─────────────────────────────────────────────
 // 类型定义（与后端 API 文档对应）
@@ -110,8 +146,9 @@ export const getEvaluationStatus = (id: number): Promise<{
  * 获取评估历史列表
  * GET /api/evaluations
  */
-export const getEvaluations = (): Promise<any[]> => {
-  return http.get('/api/evaluations');
+export const getEvaluations = async (): Promise<any[]> => {
+  const res: any = await http.get('/api/evaluations');
+  return res.items || [];
 };
 
 /**
