@@ -296,3 +296,19 @@ export const uploadRequirementFile = async (file: File): Promise<{ file_id: numb
     await delay(500);
     return { file_id: genId(), name: file.name, size: `${(file.size / 1024).toFixed(2)} KB` };
 };
+
+export const createCategory = async (payload: { name: string; type: string }): Promise<any> => {
+    return { id: Date.now(), ...payload, files: [] };
+};
+
+export const deleteCategory = async (_id: number): Promise<void> => {
+    return;
+};
+
+export const deleteStandardFile = async (_id: number): Promise<void> => {
+    return;
+};
+
+export const updateStandardStatus = async (_id: number, _status: string): Promise<void> => {
+    return;
+};

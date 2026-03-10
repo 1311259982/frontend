@@ -39,6 +39,10 @@ export const {
     getStandards,
     uploadStandardFile,
     uploadRequirementFile,
+    createCategory,
+    deleteCategory,
+    deleteStandardFile,
+    updateStandardStatus,
 } = service;
 
 // 仅 mock 有的额外函数（不影响 api 模式）

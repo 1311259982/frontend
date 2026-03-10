@@ -2,7 +2,9 @@ import { defineStore } from 'pinia';
 import {
   getBaselines, createBaseline, deleteBaseline,
   getEvaluations, createEvaluation, deleteEvaluation,
-  archiveEvaluation, getStandards, seedData
+  archiveEvaluation, getStandards, uploadStandardFile,
+  createCategory, deleteCategory, deleteStandardFile, seedData,
+  updateStandardStatus
 } from '@/services';
 
 // ─────────────────────────────────────────────
@@ -169,6 +171,22 @@ export const useKnowledgeStore = defineStore('knowledge', {
     userCategories(state) {
       return state.categories.filter(c => c.type === 'user');
     },
+    enabledDefaultCategories(state) {
+      return state.categories
+        .filter(c => c.type === 'default')
+        .map(cat => ({
+          ...cat,
+          files: cat.files.filter(f => f.status === 'enabled')
+        })); // Do not filter out empty default categories
+    },
+    enabledUserCategories(state) {
+      return state.categories
+        .filter(c => c.type === 'user')
+        .map(cat => ({
+          ...cat,
+          files: cat.files.filter(f => f.status === 'enabled')
+        }));
+    },
     allSelectedFiles(state) {
       const selected = [] as any[];
       state.categories.forEach(cat => {
@@ -230,22 +248,81 @@ export const useKnowledgeStore = defineStore('knowledge', {
         category.files.push({ ...file, id: Date.now(), status: 'enabled' });
       }
     },
-    removeFile(categoryId: number, fileId: number) {
-      const category = this.categories.find(c => c.id === categoryId);
-      if (category) {
-        category.files = category.files.filter(f => f.id !== fileId);
+    async removeFile(categoryId: number, fileId: number) {
+      try {
+        await deleteStandardFile(fileId);
+        const category = this.categories.find(c => c.id === categoryId);
+        if (category) {
+          category.files = category.files.filter(f => f.id !== fileId);
+        }
+      } catch (e) {
+        console.error('[KnowledgeStore] removeFile failed:', e);
+        throw e;
       }
     },
-    addCategory(name: string, type: 'default' | 'user' = 'default') {
-      this.categories.push({ id: Date.now(), name, type, files: [] });
+    async addCategory(name: string, type: 'default' | 'user' = 'default') {
+      try {
+        const res = await createCategory({ name, type });
+        this.categories.push({
+          id: res.id,
+          name: res.name,
+          type: res.type,
+          files: []
+        });
+        return res;
+      } catch (e) {
+        console.error('[KnowledgeStore] addCategory failed:', e);
+        throw e;
+      }
     },
-    removeCategory(id: number) {
-      this.categories = this.categories.filter(c => c.id !== id);
+    async updateFileStatus(categoryId: number, fileId: number, status: string) {
+      try {
+        await updateStandardStatus(fileId, status);
+        const category = this.categories.find(c => c.id === categoryId);
+        if (category) {
+          const file = category.files.find(f => f.id === fileId);
+          if (file) {
+            file.status = status;
+          }
+        }
+      } catch (e) {
+        console.error('[KnowledgeStore] updateFileStatus failed:', e);
+        throw e;
+      }
+    },
+    async removeCategory(id: number) {
+      try {
+        await deleteCategory(id);
+        this.categories = this.categories.filter(c => c.id !== id);
+      } catch (e) {
+        console.error('[KnowledgeStore] removeCategory failed:', e);
+        throw e;
+      }
     },
     toggleCategory(id: number) {
       const index = this.collapsedCategories.indexOf(id);
       if (index > -1) this.collapsedCategories.splice(index, 1);
       else this.collapsedCategories.push(id);
+    },
+    async uploadStandard(categoryId: number, file: File) {
+      try {
+        const res = await uploadStandardFile(categoryId, file);
+        // After successful upload, find the category and add the file to the local list
+        const category = this.categories.find(c => c.id === categoryId);
+        if (category) {
+          // The backend returns StandardFileUploadResponse with file_id
+          category.files.push({
+            id: res.file_id || Date.now(),
+            name: res.name || file.name,
+            status: 'enabled',
+            desc: null
+          });
+        }
+        return res;
+      } catch (e) {
+        console.error('[KnowledgeStore] uploadStandard failed:', e);
+        throw e;
+      }
     }
   },
 });

@@ -112,7 +112,7 @@
               >
                 <div class="flex justify-between items-center">
                   <span class="font-bold text-gray-700">{{ cat.name }}</span>
-                  <el-button size="small" link type="danger" icon="Delete" @click.stop="knowledgeStore.removeCategory(cat.id)"></el-button>
+                  <el-button size="small" link type="danger" icon="Delete" @click.stop="handleRemoveCategory(cat.id)"></el-button>
                 </div>
                 <p class="text-xs text-gray-400 mt-1">{{ cat.files.length }} 个文件</p>
               </el-card>
@@ -135,7 +135,7 @@
               >
                 <div class="flex justify-between items-center">
                   <span class="font-bold text-gray-700">{{ cat.name }}</span>
-                  <el-button size="small" link type="danger" icon="Delete" @click.stop="knowledgeStore.removeCategory(cat.id)"></el-button>
+                  <el-button size="small" link type="danger" icon="Delete" @click.stop="handleRemoveCategory(cat.id)"></el-button>
                 </div>
                 <p class="text-xs text-gray-400 mt-1">{{ cat.files.length }} 个文件</p>
               </el-card>
@@ -385,7 +385,7 @@ import {
   Lock, User, Upload, ArrowDown, Collection,
   DocumentChecked, Connection
 } from '@element-plus/icons-vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -514,31 +514,71 @@ const closeAddCategory = () => {
   showAddCategoryDialog.value = false;
 };
 
-const confirmAddCategory = () => {
+const confirmAddCategory = async () => {
   if (!newCategoryName.value) return;
-  knowledgeStore.addCategory(newCategoryName.value, newCategoryType.value);
-  closeAddCategory();
-  ElMessage.success('分类添加成功');
+  try {
+    await knowledgeStore.addCategory(newCategoryName.value, newCategoryType.value);
+    closeAddCategory();
+    ElMessage.success('分类添加成功');
+  } catch (e: any) {
+    ElMessage.error(`添加失败: ${e.message || '未知错误'}`);
+  }
 };
 
-const handleAdminFileUpload = (file: any) => {
+const handleRemoveCategory = (id: number) => {
+  ElMessageBox.confirm('确定要删除此分类及其所有标准文档吗？', '警告', {
+    type: 'warning',
+    confirmButtonText: '确定删除',
+    cancelButtonText: '取消'
+  }).then(async () => {
+    try {
+      await knowledgeStore.removeCategory(id);
+      if (selectedAdminCategory.value === id) {
+        selectedAdminCategory.value = knowledgeStore.categories[0]?.id;
+      }
+      ElMessage.success('分类已删除');
+    } catch (e: any) {
+      ElMessage.error(`删除失败: ${e.message || '未知错误'}`);
+    }
+  }).catch(() => {});
+};
+
+const handleAdminFileUpload = async (file: any) => {
   if (!selectedAdminCategory.value) {
     ElMessage.warning('请先选择一个分类');
     return;
   }
-  knowledgeStore.addFile(selectedAdminCategory.value, {
-    name: file.name,
-  });
-  ElMessage.success(`已上传文件 ${file.name} 到分类 ${currentCategoryName.value}`);
+  try {
+    await knowledgeStore.uploadStandard(selectedAdminCategory.value, file.raw);
+    ElMessage.success(`已上传文件 ${file.name} 到分类 ${currentCategoryName.value}`);
+  } catch (e: any) {
+    ElMessage.error(`上传失败: ${e.message || '未知错误'}`);
+  }
 };
 
-const toggleFileStatus = (file: any) => {
-  file.status = file.enabled ? 'enabled' : 'disabled';
+const toggleFileStatus = async (file: any) => {
+  const newStatus = file.enabled ? 'enabled' : 'disabled';
+  try {
+    await knowledgeStore.updateFileStatus(selectedAdminCategory.value, file.id, newStatus);
+    ElMessage.success(`文档 "${file.name}" 状态已更新为: ${newStatus === 'enabled' ? '开启' : '关闭'}`);
+  } catch (e: any) {
+    // Revert the toggle on failure
+    file.enabled = !file.enabled;
+    ElMessage.error(`状态更新失败: ${e.message || '未知错误'}`);
+  }
 };
 
 const removeFile = (file: any) => {
-  knowledgeStore.removeFile(selectedAdminCategory.value, file.id);
-  ElMessage.success('文件已删除');
+  ElMessageBox.confirm(`确定要删除标准文档 "${file.name}" 吗？`, '提示', {
+    type: 'warning'
+  }).then(async () => {
+    try {
+      await knowledgeStore.removeFile(selectedAdminCategory.value, file.id);
+      ElMessage.success('文件已删除');
+    } catch (e: any) {
+      ElMessage.error(`删除失败: ${e.message || '未知错误'}`);
+    }
+  }).catch(() => {});
 };
 
 const closeAddDialog = () => {

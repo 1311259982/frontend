@@ -62,7 +62,7 @@
         <!-- Standards List -->
         <div class="flex-1 overflow-y-auto p-4 space-y-6">
             <!-- Default Categories -->
-            <div v-for="category in knowledgeStore.defaultCategories" :key="category.id" class="space-y-2">
+            <div v-for="category in knowledgeStore.enabledDefaultCategories" :key="category.id" class="space-y-2">
               <div 
                 class="flex items-center justify-between cursor-pointer group px-1"
                 @click="knowledgeStore.toggleCategory(category.id)"
@@ -103,7 +103,7 @@
             </div>
 
             <!-- User Defined Categories -->
-            <div v-for="category in knowledgeStore.userCategories" :key="category.id" class="space-y-2">
+            <div v-for="category in knowledgeStore.enabledUserCategories" :key="category.id" class="space-y-2">
               <div 
                 class="flex items-center justify-between cursor-pointer group px-1"
                 @click="knowledgeStore.toggleCategory(category.id)"
@@ -1184,20 +1184,23 @@ const filteredHistory = computed(() => {
   return evalStore.history.filter(h => h.title.toLowerCase().includes(historySearch.value.toLowerCase()));
 });
 
-const handleUserStandardUploadToCat = (file: any, categoryId: number) => {
-  knowledgeStore.addFile(categoryId, {
-    name: file.name,
-    size: (file.size / 1024).toFixed(2) + ' KB',
-  });
-  ElMessage.success(`已添加标准到分类: ${file.name}`);
+const handleUserStandardUploadToCat = async (file: any, categoryId: number) => {
+  try {
+    await knowledgeStore.uploadStandard(categoryId, file.raw);
+    ElMessage.success(`标准文档 "${file.name}" 上传并解析成功`);
+  } catch (e: any) {
+    ElMessage.error(`上传失败: ${e.message || '未知错误'}`);
+  }
 };
 
-const handleUserStandardUpload = (file: any) => {
-  knowledgeStore.addUserFile({
-    name: file.name,
-    size: (file.size / 1024).toFixed(2) + ' KB',
-  });
-  ElMessage.success(`已添加自定义标准: ${file.name}`);
+const handleUserStandardUpload = async (file: any) => {
+  // Use category 4 (Custom Documents) as default if no category specified
+  try {
+    await knowledgeStore.uploadStandard(4, file.raw);
+    ElMessage.success(`自定义标准 "${file.name}" 上传并解析成功`);
+  } catch (e: any) {
+    ElMessage.error(`上传失败: ${e.message || '未知错误'}`);
+  }
 };
 
 const handleReqFileUpload = (file: any) => {
