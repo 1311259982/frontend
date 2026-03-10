@@ -929,6 +929,7 @@ onMounted(async () => {
     baselineStore.fetchBaselines(),
     evalStore.fetchHistory(),
     knowledgeStore.fetchStandards(),
+    modelStore.fetchModels(),
   ]);
 });
 
