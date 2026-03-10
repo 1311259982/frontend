@@ -667,6 +667,18 @@ export const useEvaluationStore = defineStore('evaluation', {
         console.warn('[EvaluationStore] createEvaluation failed, using local fallback:', e);
         this.history.unshift({ ...newRecord, id: Date.now() });
       }
+    },
+
+    /**
+     * 删除未归档的评估记录（调用 service 层，同时更新本地历史列表）
+     */
+    async discardEvaluation(id: number) {
+      try {
+        await deleteEvaluation(id);
+        this.history = this.history.filter(item => item.id !== id);
+      } catch (e) {
+        console.error('[EvaluationStore] discardEvaluation failed:', e);
+      }
     }
   }
 });

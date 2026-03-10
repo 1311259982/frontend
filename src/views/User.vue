@@ -516,7 +516,7 @@
                 <el-button v-if="evalStore.referencedBaselineIds.length > 0" type="primary" icon="Plus" @click="continueSupplementing">基于本次结果继续补充需求</el-button>
               </div>
               <div class="flex gap-2">
-                <el-button icon="Refresh" @click="evalStore.reset()">重新评估</el-button>
+                <el-button icon="Refresh" @click="handleRestartEvaluation">重新评估</el-button>
                 <el-button type="primary" icon="ChatDotRound">针对报告提问</el-button>
               </div>
             </div>
@@ -557,7 +557,7 @@
             >
               开始智能评估
             </el-button>
-            <el-button v-if="evalStore.currentReport" type="primary" size="large" class="px-10 rounded-xl font-bold" @click="evalStore.reset()">
+            <el-button v-if="evalStore.currentReport" type="primary" size="large" class="px-10 rounded-xl font-bold" @click="handleRestartEvaluation">
               开启新评估
             </el-button>
             <el-button 
@@ -1294,6 +1294,23 @@ const finishEvaluation = async (report: any) => {
   ElMessage.success('评估完成！');
 };
 
+const handleRestartEvaluation = async () => {
+  if (evalStore.currentReport && !evalStore.currentReport.is_archived && _currentEvaluationId) {
+    try {
+      await ElMessageBox.confirm('当前评估尚未归档，开启新评估将彻底删除当前记录，是否确认？', '提示', {
+        type: 'warning',
+        confirmButtonText: '确定重置并删除',
+        cancelButtonText: '取消'
+      });
+      await evalStore.discardEvaluation(_currentEvaluationId);
+      _currentEvaluationId = null;
+    } catch {
+      return; // 用户取消
+    }
+  }
+  evalStore.reset();
+};
+
 const getScoreColor = (score: number) => {
   if (score >= 80) return 'text-green-400';
   if (score >= 60) return 'text-orange-400';
@@ -1482,15 +1499,20 @@ const handleHistoryReference = (history: any) => {
 };
 
 const removeHistory = (id: number) => {
-  ElMessageBox.confirm('确定要删除这条评估记录吗？', '提示', {
+  ElMessageBox.confirm('确定要彻底删除这条未归档的评估记录吗？', '警告', {
     type: 'warning'
-  }).then(() => {
-    evalStore.history = evalStore.history.filter(h => h.id !== id);
-    ElMessage.success('已删除');
+  }).then(async () => {
+    try {
+      await evalStore.discardEvaluation(id);
+      ElMessage.success('已删除');
+    } catch (e: any) {
+      ElMessage.error(`删除失败：${e.message || '未知错误'}`);
+    }
   }).catch(() => {
     // User canceled
   });
 };
+
 
 const handleLogout = () => {
   authStore.logout();
@@ -1539,19 +1561,24 @@ const archiveAllProjectTasks = (project: any) => {
 // 删除整个项目
 const deleteProject = (project: any) => {
   ElMessageBox.confirm(
-    `确定要删除项目 "${project.projectName}" 及其所有需求吗？此操作不可恢复。`,
+    `确定要彻底删除项目 "${project.projectName}" 的所有未归档评估记录吗？此操作不可恢复。`,
     '删除项目',
     {
       confirmButtonText: '确定删除',
       cancelButtonText: '取消',
       type: 'warning'
     }
-  ).then(() => {
-    // 从历史中移除该项目的所有需求
-    evalStore.history = evalStore.history.filter(
-      h => !project.items.some((item: any) => item.id === h.id)
-    );
-    ElMessage.success(`项目 "${project.projectName}" 已删除`);
+  ).then(async () => {
+    try {
+      for (const item of project.items) {
+        if (!item.is_archived) {
+          await evalStore.discardEvaluation(item.id);
+        }
+      }
+      ElMessage.success(`项目 "${project.projectName}" 已清空`);
+    } catch (e: any) {
+      ElMessage.error(`部分删除失败：${e.message}`);
+    }
   }).catch(() => {});
 };
 
