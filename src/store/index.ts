@@ -78,6 +78,7 @@ export const useModelStore = defineStore('models', {
           ...item,
           status: item.is_active ? 'active' : 'available',
           apiKey: item.api_key, // frontend prefers small camel case
+          baseUrl: item.base_url, // frontend prefers small camel case
         }));
       } catch (error) {
         console.error('Failed to fetch models:', error);
@@ -92,7 +93,7 @@ export const useModelStore = defineStore('models', {
           provider: model.provider,
           model_name: model.model_name || model.name,
           api_key: model.apiKey || '',
-          base_url: model.base_url || '',
+          base_url: model.baseUrl || '',
           is_active: false
         };
         const newModel = await createModel(payload);
@@ -118,7 +119,7 @@ export const useModelStore = defineStore('models', {
           provider: updatedModel.provider,
           model_name: updatedModel.model_name || updatedModel.name,
           api_key: updatedModel.apiKey || '',
-          base_url: updatedModel.base_url || '',
+          base_url: updatedModel.baseUrl || '',
         };
         await updateModel(updatedModel.id, payload);
         await this.fetchModels(); // Refresh list

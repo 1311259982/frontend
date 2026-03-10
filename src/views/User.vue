@@ -1149,7 +1149,7 @@ const settings = reactive({
 });
 
 const availableModels = computed(() => {
-  return modelStore.models.filter(m => m.status === 'available');
+  return modelStore.models.filter(m => m.status === 'active');
 });
 
 const progressText = computed(() => {

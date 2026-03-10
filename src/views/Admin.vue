@@ -69,7 +69,7 @@
                     </div>
                   </div>
                   <el-tag :type="model.status === 'active' ? 'success' : 'info'" size="small" round effect="light">
-                    {{ model.status === 'active' ? '当前启用' : '备用' }}
+                    {{ model.status === 'active' ? '已启用' : '未启用' }}
                   </el-tag>
                 </div>
                 
@@ -85,8 +85,9 @@
                 </div>
                 
                 <div class="flex gap-2 border-t border-gray-100 pt-4">
-                  <el-button v-if="model.status !== 'active'" size="small" plain type="success" @click="handleActivateModel(model.id)">启用该模型</el-button>
-                  <el-button size="small" :class="{'flex-1': model.status === 'active'}" icon="Edit" @click="handleEdit(model)">编辑</el-button>
+                  <el-button v-if="model.status !== 'active'" size="small" plain type="success" @click="handleActivateModel(model.id)">启用</el-button>
+                  <el-button v-else size="small" plain type="warning" @click="handleActivateModel(model.id)">禁用</el-button>
+                  <el-button size="small" icon="Edit" @click="handleEdit(model)">编辑</el-button>
                   <el-button size="small" type="danger" plain icon="Delete" @click="handleRemoveModel(model.id)">删除</el-button>
                 </div>
               </el-card>
@@ -580,9 +581,9 @@ const confirmEdit = async () => {
 const handleActivateModel = async (id: number) => {
   try {
     await modelStore.activateModel(id);
-    ElMessage.success('已切换当前启用的模型');
+    ElMessage.success('模型状态已更新');
   } catch (err) {
-    ElMessage.error('模型切换失败');
+    ElMessage.error('模型状态更新失败');
   }
 };
 
