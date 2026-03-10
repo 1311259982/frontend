@@ -87,6 +87,7 @@ export interface StartEvaluationPayload {
   referenced_baseline_id?: number | null;
   only_evaluate_new?: boolean;
   instructions?: string;
+  model_id?: number;
 }
 
 export interface EvaluationReport {

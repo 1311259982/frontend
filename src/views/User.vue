@@ -1234,6 +1234,7 @@ const handleStartEvaluation = async () => {
       referenced_baseline_id: evalStore.referencedBaselineIds[0] || null,
       only_evaluate_new: evalStore.onlyEvaluateNew,
       instructions: evalStore.instructions || undefined,
+      model_id: availableModels.value.find(m => m.name === settings.model)?.id,
     };
 
     const { evaluation_id } = await startEvaluation(payload);
