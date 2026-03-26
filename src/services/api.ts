@@ -308,3 +308,67 @@ export const deleteModel = (id: number): Promise<void> => {
   return http.delete(`/api/admin/models/${id}`);
 };
 
+// ─────────────────────────────────────────────
+// 基线积木块 (Baseline Items) API
+// ─────────────────────────────────────────────
+
+export interface BaselineItemDetail {
+  id: number;
+  version_id: number;
+  parent_item_id: number | null;
+  origin_version_id: number | null;
+  title: string;
+  content: string | null;
+  storage_path: string | null;
+  is_new: boolean;
+  is_deleted: boolean;
+  sort_order: number;
+}
+
+export interface BaselineItemExport {
+  version_id: number;
+  version: string;
+  project_name: string;
+  markdown_content: string;
+}
+
+/**
+ * 获取某版本的全部积木块
+ * GET /api/baselines/{versionId}/items
+ */
+export const getBaselineItems = (versionId: number): Promise<BaselineItemDetail[]> => {
+  return http.get(`/api/baselines/${versionId}/items`);
+};
+
+/**
+ * 新增积木块
+ * POST /api/baselines/{versionId}/items
+ */
+export const createBaselineItem = (versionId: number, payload: { title: string; content?: string; sort_order?: number }): Promise<BaselineItemDetail> => {
+  return http.post(`/api/baselines/${versionId}/items`, payload);
+};
+
+/**
+ * 修改积木块
+ * PUT /api/baselines/{versionId}/items/{itemId}
+ */
+export const updateBaselineItem = (versionId: number, itemId: number, payload: { title?: string; content?: string; sort_order?: number }): Promise<BaselineItemDetail> => {
+  return http.put(`/api/baselines/${versionId}/items/${itemId}`, payload);
+};
+
+/**
+ * 软删除积木块
+ * DELETE /api/baselines/{versionId}/items/{itemId}
+ */
+export const deleteBaselineItem = (versionId: number, itemId: number): Promise<void> => {
+  return http.delete(`/api/baselines/${versionId}/items/${itemId}`);
+};
+
+/**
+ * 导出积木块为 Markdown
+ * GET /api/baselines/{versionId}/export
+ */
+export const exportBaselineItems = (versionId: number): Promise<BaselineItemExport> => {
+  return http.get(`/api/baselines/${versionId}/export`);
+};
+

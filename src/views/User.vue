@@ -750,6 +750,7 @@
 
                   <!-- Hover Actions -->
                   <div class="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                    <el-button size="small" circle icon="Notebook" type="success" plain @click.stop="$router.push({ name: 'BaselineDetail', params: { versionId: base.id }, query: { project: base.name, version: base.version } })" />
                     <el-button size="small" circle icon="View" type="primary" plain @click.stop="loadHistory({...base, title: base.name, total_score: base.score})" />
                   </div>
                 </div>

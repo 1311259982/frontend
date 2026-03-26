@@ -21,6 +21,12 @@ const router = createRouter({
       component: () => import('@/views/Admin.vue'),
       meta: { requiresAuth: true, role: 'admin' },
     },
+    {
+      path: '/baseline/:versionId',
+      name: 'BaselineDetail',
+      component: () => import('@/views/BaselineDetail.vue'),
+      meta: { requiresAuth: true },
+    },
   ],
 });
 
