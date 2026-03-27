@@ -603,92 +603,6 @@
         </div>
         
         <div class="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-thin">
-          <!-- Independent Tasks (Unarchived/New) -->
-          <div v-if="evalStore.aggregatedHistory.independentByProject.length > 0" class="space-y-6">
-            <div class="flex items-center gap-3 px-2 mb-2">
-              <div class="w-1 h-5 bg-gradient-to-b from-orange-400 to-orange-500 rounded-full"></div>
-              <h3 class="text-sm font-bold text-gray-700">未归档项目</h3>
-              <span class="text-xs text-gray-400 font-medium">{{ evalStore.aggregatedHistory.independentByProject.length }} 个项目</span>
-            </div>
-            
-            <!-- Grouped by Project -->
-            <el-collapse v-model="activeUnarchivedProjects" accordion class="border-none space-y-3">
-              <el-collapse-item 
-                v-for="project in evalStore.aggregatedHistory.independentByProject" 
-                :key="project.projectName" 
-                :name="project.projectName" 
-                class="group rounded-xl overflow-hidden shadow-sm border border-gray-100"
-              >
-                <template #title>
-                  <div class="flex items-center justify-between w-full p-4 bg-white gap-4 min-h-[64px]">
-                    <div class="flex items-center gap-3 flex-1 overflow-hidden">
-                      <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-100 to-orange-50 flex items-center justify-center shrink-0 shadow-sm">
-                        <el-icon class="text-orange-600 font-bold text-lg"><Timer /></el-icon>
-                      </div>
-                      <div class="flex items-center gap-2">
-                        <span class="text-base font-bold text-gray-800 truncate min-w-0 leading-tight">{{ project.projectName }}</span>
-                        <el-tag v-if="project.items.length > 0" size="small" :type="getScoreType(project.items[0].total_score)" class="text-xs font-bold whitespace-nowrap">{{ project.items[0].total_score }}</el-tag>
-                      </div>
-                    </div>
-                    <div class="flex items-center gap-1.5 shrink-0">
-                      <el-button size="small" circle icon="CollectionTag" type="success" plain class="!w-8 !h-8" @click.stop="archiveAllProjectTasks(project)" />
-                      <el-button size="small" circle icon="Delete" type="danger" plain class="!w-8 !h-8" @click.stop="deleteProject(project)" />
-                    </div>
-                  </div>
-                </template>
-                
-                <div class="space-y-3 p-3 bg-gray-50/70 rounded-b-xl">
-                  <!-- Parent Item (First item as parent) -->
-                  <div 
-                    v-if="project.items.length > 0"
-                    class="bg-white p-5 rounded-lg shadow-sm border-l-4 border-l-blue-400 hover:shadow-md transition-all duration-300 cursor-pointer group relative"
-                    :class="isHistoryReferenced(project.items[0]) ? 'border-blue-400 bg-blue-50/30 ring-1 ring-blue-100' : ''"
-                    @click="loadHistory(project.items[0])"
-                  >
-                    <h4 class="text-sm font-bold text-gray-800 line-clamp-1 mb-2 pr-8">{{ project.items[0].title }}</h4>
-                    
-                    <div class="flex items-center justify-between">
-                      <span class="text-xs text-gray-500">{{ project.items[0].date }}</span>
-                      <span class="text-xs font-medium text-gray-500">{{ project.items[0].version }}</span>
-                    </div>
-
-                    <!-- Hover Actions -->
-                    <div class="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
-                      <el-button size="small" circle icon="View" type="primary" plain @click.stop="loadHistory(project.items[0])" />
-                    </div>
-                  </div>
-
-                  <!-- Child Items -->
-                  <div 
-                    v-for="history in project.items.slice(1)" 
-                    :key="history.id"
-                    class="bg-white p-5 rounded-lg shadow-sm border border-gray-100 hover:border-blue-300 hover:shadow-md transition-all duration-300 cursor-pointer group relative"
-                    :class="isHistoryReferenced(history) ? 'border-blue-400 bg-blue-50/30 ring-1 ring-blue-100' : ''"
-                    @click="loadHistory(history)"
-                  >
-                    <h4 class="text-sm font-bold text-gray-700 line-clamp-1 mb-2 pr-8">{{ history.title }}</h4>
-                    
-                    <div class="flex items-center justify-between">
-                      <span class="text-xs text-gray-500">{{ history.date }}</span>
-                      <span class="text-xs font-medium text-gray-500">{{ history.version }}</span>
-                    </div>
-
-                    <!-- Hover Actions -->
-                    <div class="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
-                      <el-button size="small" circle icon="View" type="primary" plain @click.stop="loadHistory(history)" />
-                    </div>
-                  </div>
-                </div>
-              </el-collapse-item>
-            </el-collapse>
-          </div>
-          
-          <!-- No Unarchived Tasks -->
-          <div v-else-if="evalStore.aggregatedHistory.independent.length === 0 && evalStore.aggregatedHistory.baselines.length === 0" class="flex flex-col items-center justify-center h-64 text-gray-400 opacity-40">
-            <el-icon size="64" class="mb-2"><DataBoard /></el-icon>
-            <p class="text-sm">暂无评估记录</p>
-          </div>
-
           <!-- Grouped by Baseline -->
           <el-collapse v-model="activeHistoryNames" accordion class="border-none space-y-3">
             <el-collapse-item v-for="base in evalStore.aggregatedHistory.baselines" :key="base.id" :name="base.id" class="group rounded-xl overflow-hidden shadow-sm border border-gray-100">
@@ -703,7 +617,7 @@
                         <span class="text-sm font-bold text-gray-800 truncate min-w-0 leading-tight">{{ base.name }}</span>
                         <el-tag size="small" :type="getScoreType(base.score)" class="text-xs font-bold whitespace-nowrap">{{ base.score }}</el-tag>
                       </div>
-                      <el-select v-if="base.versions" size="small" class="!w-[100px]" @change="handleVersionChange(base, $event)" placeholder="选择版本">
+                      <el-select v-if="base.versions" v-model="selectedVersions[base.id]" size="small" class="!w-[100px]" @change="handleVersionChange(base, $event)" placeholder="选择版本">
                         <el-option 
                           v-for="version in base.versions" 
                           :key="version.id" 
