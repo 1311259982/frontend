@@ -139,7 +139,7 @@
                       </p>
                     </div>
                     <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <el-button size="small" link type="danger" icon="Delete" @click.stop="knowledgeStore.removeFile(category.id, file.id)" />
+                      <el-button size="small" link type="danger" icon="Delete" @click.stop="handleDeleteStandardFile(category.id, file.id, file.name)" />
                     </div>
                   </div>
                 </div>
@@ -1116,6 +1116,25 @@ const handleUserStandardUpload = async (file: any) => {
   } catch (e: any) {
     ElMessage.error(`上传失败: ${e.message || '未知错误'}`);
   }
+};
+
+const handleDeleteStandardFile = (categoryId: number, fileId: number, fileName: string) => {
+  ElMessageBox.confirm(
+    `确定要删除标准文件 "${fileName}" 吗？此操作不可逆。`,
+    '警告',
+    {
+      confirmButtonText: '确定删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    }
+  ).then(async () => {
+    try {
+      await knowledgeStore.removeFile(categoryId, fileId);
+      ElMessage.success('删除成功');
+    } catch (e: any) {
+      ElMessage.error(`删除失败: ${e.message || '权限不足或未知错误'}`);
+    }
+  }).catch(() => {});
 };
 
 const handleReqFileUpload = (file: any) => {
