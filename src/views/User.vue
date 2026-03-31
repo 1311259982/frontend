@@ -408,13 +408,21 @@
                 <el-slider v-model="settings.depth" :step="1" :max="3" show-stops />
               </el-form-item>
               <el-form-item label="模型选择">
-                <el-select v-model="settings.model" class="w-full">
+                <el-select 
+                  v-model="settings.selectedModelId" 
+                  class="w-full"
+                  v-loading="modelStore.isLoading"
+                  placeholder="正在同步配置..."
+                >
                   <el-option 
                     v-for="model in availableModels" 
                     :key="model.id" 
-                    :label="model.name + (model.name.includes('GPT-4o') ? ' (推荐)' : '')" 
-                    :value="model.name" 
+                    :label="model.name" 
+                    :value="model.id" 
                   />
+                  <template #empty v-if="modelStore.isLoading">
+                    <div class="p-4 text-center text-gray-400">正在同步配置...</div>
+                  </template>
                 </el-select>
               </el-form-item>
             </div>
@@ -449,7 +457,10 @@
               <div class="flex justify-between items-center mb-8">
                 <div>
                   <h2 class="text-2xl font-bold mb-1">需求可测试性评估报告</h2>
-                  <p class="text-xs opacity-60">评估时间: {{ new Date().toLocaleString() }} • 使用模型: GPT-4o</p>
+                  <p class="text-xs opacity-60">
+                    评估时间: {{ evalStore.currentReport.date || new Date().toLocaleString() }} • 
+                    使用模型: {{ evalStore.currentReport.model_used || settings.model }}
+                  </p>
                 </div>
                 <div class="text-center">
                   <div :class="['text-5xl font-black mb-1', getScoreColor(evalStore.currentReport.total_score || evalStore.currentReport.score)]">
@@ -869,13 +880,19 @@ const modelStore = useModelStore();
 const baselineStore = useBaselineStore();
 
 // 初始化：从 service 层通过 store 加载初始数据
-onMounted(async () => {
-  await Promise.all([
-    baselineStore.fetchBaselines(),
-    evalStore.fetchHistory(),
-    knowledgeStore.fetchStandards(),
-    modelStore.fetchModels(),
-  ]);
+onMounted(() => {
+  console.log('[User.vue] Starting background data synchronization...');
+  
+  // 1. 核心评估参数（模型/标准）- 独立拉取，不阻塞主线程
+  modelStore.fetchModels().then(() => {
+    console.log('[User.vue] Model sync complete.');
+  }).catch(e => console.error('[User.vue] Model sync error:', e));
+
+  knowledgeStore.fetchStandards().catch(e => console.error('[User.vue] Standards sync error:', e));
+
+  // 2. 辅助数据（基线/历史）- 允许稍微加载慢一点
+  baselineStore.fetchBaselines().catch(e => console.error('[User.vue] Baseline sync error:', e));
+  evalStore.fetchHistory().catch(e => console.error('[User.vue] History sync error:', e));
 });
 
 // Automatically reset onlyReference if no baselines are selected
@@ -1092,11 +1109,22 @@ const previewFile = (file: any) => {
 const settings = reactive({
   depth: 2,
   model: 'GPT-4o',
+  selectedModelId: null as number | null,
 });
 
 const availableModels = computed(() => {
-  return modelStore.models.filter(m => m.status === 'active');
+  // 严格同步：只返回数据库中标记为 is_active 的模型
+  return modelStore.models.filter(m => m.is_active);
 });
+
+// 重磅修复：一旦后端模型数据加载完成，自动将 ID=7 或其他 is_active=1 的模型 ID 同步到 UI
+watch(() => modelStore.isLoaded, (isLoaded) => {
+  if (isLoaded) {
+    console.log('[User.vue] Model data synchronized. Setting UI default ID to:', modelStore.defaultModelId);
+    settings.model = modelStore.defaultModel;
+    settings.selectedModelId = modelStore.defaultModelId;
+  }
+}, { immediate: true });
 
 const progressText = computed(() => {
   if (evalStore.evaluationProgress < 25) return '正在加载评估标准...';
@@ -1210,7 +1238,7 @@ const handleStartEvaluation = async () => {
       referenced_baseline_id: evalStore.referencedBaselineIds[0] || null,
       only_evaluate_new: evalStore.onlyEvaluateNew,
       instructions: evalStore.instructions || undefined,
-      model_id: availableModels.value.find(m => m.name === settings.model)?.id,
+      model_id: settings.selectedModelId || modelStore.defaultModelId,
     };
 
     const { evaluation_id } = await startEvaluation(payload);

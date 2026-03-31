@@ -66,7 +66,10 @@ import { getModels, createModel, updateModel, activateModel, deleteModel } from 
 export const useModelStore = defineStore('models', {
   state: () => ({
     models: [] as any[],
+    defaultModel: 'GPT-4o', 
+    defaultModelId: null as number | null,
     isLoading: false,
+    isLoaded: false,
     prompts: {
       system: '你是一个专业的软件需求测试性评估专家。请根据提供的知识库标准，对需求文档进行评估。',
       format: '评估报告应包含：1. 可测试性评分 (0-100)；2. 问题点分析；3. 改进建议。',
@@ -74,16 +77,26 @@ export const useModelStore = defineStore('models', {
   }),
   actions: {
     async fetchModels() {
+      if (this.isLoading) return;
       this.isLoading = true;
       try {
         const data = await getModels();
-        // 映射后端字段到前端现有的使用习惯，或者在使用处直接修改。后端有 name, provider, model_name, api_key, base_url, is_active
+        // 映射后端字段到前端现有的使用习惯
         this.models = data.map((item: any) => ({
           ...item,
           status: item.is_active ? 'active' : 'available',
-          apiKey: item.api_key, // frontend prefers small camel case
-          baseUrl: item.base_url, // frontend prefers small camel case
+          apiKey: item.api_key, 
+          baseUrl: item.base_url,
         }));
+        
+        // 关键逻辑：寻找后端标记为 is_active 的项并同步到前端默认模型
+        const activeItem = data.find((m: any) => m.is_active);
+        if (activeItem) {
+          this.defaultModel = activeItem.name;
+          this.defaultModelId = activeItem.id;
+          console.log('[ModelStore] Syncing persistent default model:', activeItem.name, 'ID:', activeItem.id);
+        }
+        this.isLoaded = true;
       } catch (error) {
         console.error('Failed to fetch models:', error);
       } finally {
@@ -654,7 +667,7 @@ export const useEvaluationStore = defineStore('evaluation', {
           : (this.requirementTitle || this.textContent.slice(0, 15) + '...'),
         total_score: report.total_score || report.score,
         date: new Date().toISOString().split('T')[0],
-        model: 'GPT-4o',
+        model: report.model_used || 'GPT-4o',
         standards: [],
         hasReference: references.length > 0,
         references,
