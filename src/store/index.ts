@@ -1,10 +1,12 @@
 import { defineStore } from 'pinia';
 import {
   getBaselines, createBaseline, deleteBaseline,
-  getEvaluations, createEvaluation, deleteEvaluation,
+  getEvaluations, createEvaluation,
+  updateEvaluation, cancelEvaluation,
   archiveEvaluation, getStandards, uploadStandardFile,
   createCategory, deleteCategory, deleteStandardFile, seedData,
-  updateStandardStatus
+  updateStandardStatus, uploadRequirementFile,
+  deleteUpload, getBaselineContent
 } from '@/services';
 
 // ─────────────────────────────────────────────
@@ -564,12 +566,20 @@ export const useEvaluationStore = defineStore('evaluation', {
       this.currentStep = step;
     },
 
-    toggleBaseline(id: number) {
+    async toggleBaseline(id: number) {
       const index = this.referencedBaselineIds.indexOf(id);
       if (index > -1) {
         this.referencedBaselineIds.splice(index, 1);
+        this.textContent = ''; // Clear if unselected
       } else {
         this.referencedBaselineIds = [id];
+        // NEW: Fetch and seed the baseline content immediately
+        try {
+          const { content } = await getBaselineContent(id);
+          this.textContent = content;
+        } catch (e) {
+          console.error('[EvaluationStore] Failed to fetch baseline content:', e);
+        }
       }
       if (this.referencedBaselineIds.length === 0) {
         this.onlyReference = false;
@@ -670,14 +680,67 @@ export const useEvaluationStore = defineStore('evaluation', {
     },
 
     /**
-     * 删除未归档的评估记录（调用 service 层，同时更新本地历史列表）
+     * 删除或撤销评估任务（物理清理）
      */
     async discardEvaluation(id: number) {
       try {
-        await deleteEvaluation(id);
+        await cancelEvaluation(id);
         this.history = this.history.filter(item => item.id !== id);
       } catch (e) {
         console.error('[EvaluationStore] discardEvaluation failed:', e);
+      }
+    },
+
+        /**
+     * 上传需求文件并同步解析预览
+     */
+    async uploadFile(file: File) {
+      try {
+        const res = await uploadRequirementFile(file);
+        this.uploadedFile = { ...res, raw: file };
+        if (res.parsed_text) {
+          // SEED: If backend provided initial parse, put it in editor
+          this.textContent = (this.textContent ? this.textContent + '\n\n' : '') + res.parsed_text;
+        }
+        return res;
+      } catch (e) {
+        console.error('[EvaluationStore] uploadFile failed:', e);
+        throw e;
+      }
+    },
+
+    /**
+     * 移除已上传的需求文档（物理删除并清空状态）
+     */
+    async removeUploadedFile() {
+      if (!this.uploadedFile?.file_id) {
+        this.uploadedFile = null;
+        return;
+      }
+      try {
+        await deleteUpload(this.uploadedFile.file_id);
+        this.uploadedFile = null;
+      } catch (e) {
+        console.error('[EvaluationStore] removeUploadedFile failed:', e);
+        // 为了 UI 响应，哪怕后端删除失败，前端也会清空以便用户上传新文件
+        this.uploadedFile = null;
+      }
+    },
+
+    /**
+     * 修改内容并重测
+     */
+    async updateAndRestart(id: number, standards?: number[]) {
+      try {
+        const res = await updateEvaluation(id, {
+          text_content: this.textContent,
+          reevaluate: true,
+          standard_ids: standards
+        });
+        return res;
+      } catch (e) {
+        console.error('[EvaluationStore] updateAndRestart failed:', e);
+        throw e;
       }
     }
   }

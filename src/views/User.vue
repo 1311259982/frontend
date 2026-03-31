@@ -227,7 +227,7 @@
                 >
                   引用历史基准需求
                 </el-button>
-                <el-radio-group v-model="evalStore.requirementType" size="small" :disabled="evalStore.onlyReference">
+                <el-radio-group v-model="evalStore.requirementType" size="small" :disabled="evalStore.onlyReference || !!evalStore.uploadedFile">
                   <el-radio-button label="text">文本输入</el-radio-button>
                   <el-radio-button label="document">文档上传</el-radio-button>
                 </el-radio-group>
@@ -321,6 +321,7 @@
               </div>
               <div v-else class="p-8" :class="{ 'opacity-50 pointer-events-none': evalStore.onlyReference }">
                 <el-upload
+                  v-if="!evalStore.uploadedFile"
                   drag
                   action="#"
                   :auto-upload="false"
@@ -344,7 +345,34 @@
                       <p class="text-xs text-gray-400">{{ evalStore.uploadedFile.size }} • 解析成功</p>
                     </div>
                   </div>
-                  <el-button link type="danger" icon="Delete" @click="evalStore.uploadedFile = null">移除</el-button>
+                  <div class="flex items-center gap-2">
+                    <el-button 
+                      link 
+                      :type="isEditingParsedText ? 'success' : 'primary'" 
+                      :icon="isEditingParsedText ? 'View' : 'Edit'" 
+                      @click="isEditingParsedText = !isEditingParsedText"
+                    >
+                      {{ isEditingParsedText ? '收起预览' : '预览并编辑内容' }}
+                    </el-button>
+                    <el-button link type="danger" icon="Delete" @click="evalStore.removeUploadedFile()">移除</el-button>
+                  </div>
+                </div>
+
+                <!-- 方案 A: 解析文本预览与编辑容器 -->
+                <div v-if="evalStore.uploadedFile && isEditingParsedText" class="mt-4 p-4 bg-white rounded-xl border border-blue-50 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div class="flex items-center justify-between mb-2 px-1">
+                    <p class="text-xs font-bold text-gray-500 flex items-center gap-1">
+                      <el-icon><Document /></el-icon> 解析文本 (可直接在此修改)
+                    </p>
+                    <span class="text-[10px] text-gray-400">当前字数: {{ evalStore.textContent.length }}</span>
+                  </div>
+                  <el-input
+                    v-model="evalStore.textContent"
+                    type="textarea"
+                    :rows="10"
+                    placeholder="正在加载解析内容..."
+                    class="parsed-editor-mini"
+                  />
                 </div>
               </div>
             </el-card>
@@ -826,8 +854,10 @@ import {
   Search, InfoFilled, CaretBottom, UploadFilled,
   Warning, CircleCheck, Loading, Refresh, ChatDotRound,
   Delete, Back, ChatLineRound, Filter, Top, Connection,
-  View, Close, CollectionTag, DocumentChecked
+  View, Close, CollectionTag, DocumentChecked, Edit
 } from '@element-plus/icons-vue';
+
+const isEditingParsedText = ref(false);
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { startEvaluation, getEvaluationStatus, archiveEvaluation, cancelEvaluationMock } from '@/services';
 
@@ -1137,13 +1167,13 @@ const handleDeleteStandardFile = (categoryId: number, fileId: number, fileName: 
   }).catch(() => {});
 };
 
-const handleReqFileUpload = (file: any) => {
-  evalStore.uploadedFile = {
-    name: file.name,
-    size: (file.size / 1024).toFixed(2) + ' KB',
-    raw: file.raw
-  };
-  ElMessage.success('需求文档上传成功');
+const handleReqFileUpload = async (file: any) => {
+  try {
+    await evalStore.uploadFile(file.raw);
+    ElMessage.success('需求文档上传并解析成功，已自动填充编辑器');
+  } catch (e: any) {
+    ElMessage.error(`上传失败: ${e.message || '未知错误'}`);
+  }
 };
 
 // 当前正在进行的评估任务 ID（用于轮询和取消）
@@ -1161,13 +1191,22 @@ const handleStartEvaluation = async () => {
   evalStore.evaluationProgress = 0;
 
   try {
+    const standardIds = knowledgeStore.allSelectedFiles.map((f: any) => f.id);
+    
+    // 如果是“重新评估”模式，即已有正在运行的任务 ID，则走更新逻辑
+    if (_currentEvaluationId) {
+      await evalStore.updateAndRestart(_currentEvaluationId, standardIds);
+      pollEvaluationStatus(_currentEvaluationId);
+      return;
+    }
+
     const payload = {
       project_name: evalStore.projectName,
       requirement_title: evalStore.requirementTitle,
       requirement_type: evalStore.requirementType,
-      text_content: evalStore.requirementType === 'text' ? evalStore.textContent : undefined,
+      text_content: evalStore.requirementType === 'text' || evalStore.textContent ? evalStore.textContent : undefined,
       document_file_id: evalStore.requirementType === 'document' ? evalStore.uploadedFile?.file_id : undefined,
-      standard_ids: knowledgeStore.allSelectedFiles.map((f: any) => f.id),
+      standard_ids: standardIds,
       referenced_baseline_id: evalStore.referencedBaselineIds[0] || null,
       only_evaluate_new: evalStore.onlyEvaluateNew,
       instructions: evalStore.instructions || undefined,
@@ -1208,12 +1247,13 @@ const pollEvaluationStatus = (id: number) => {
 const cancelEvaluation = async () => {
   if (_pollingTimer) { clearTimeout(_pollingTimer); _pollingTimer = null; }
   if (_currentEvaluationId) {
-    await cancelEvaluationMock(_currentEvaluationId).catch(() => {});
+    // 调用真正的后端物理清理接口
+    await evalStore.discardEvaluation(_currentEvaluationId).catch(() => {});
     _currentEvaluationId = null;
   }
   evalStore.isEvaluating = false;
   evalStore.evaluationProgress = 0;
-  ElMessage.info('评估已取消');
+  ElMessage.info('评估已取消并清理物理文件');
 };
 
 /**
@@ -1229,20 +1269,33 @@ const finishEvaluation = async (report: any) => {
 };
 
 const handleRestartEvaluation = async () => {
-  if (evalStore.currentReport && !evalStore.currentReport.is_archived && _currentEvaluationId) {
+  if (evalStore.currentReport && !evalStore.currentReport.is_archived) {
     try {
-      await ElMessageBox.confirm('当前评估尚未归档，开启新评估将彻底删除当前记录，是否确认？', '提示', {
-        type: 'warning',
-        confirmButtonText: '确定重置并删除',
-        cancelButtonText: '取消'
-      });
-      await evalStore.discardEvaluation(_currentEvaluationId);
-      _currentEvaluationId = null;
-    } catch {
-      return; // 用户取消
+      await ElMessageBox.confirm(
+        '您可以选择返回编辑当前内容并重测（保留历史记录），或者重置所有内容（彻底删除当前记录）。',
+        '评估迭代提示',
+        {
+          distinguishCancelAndClose: true,
+          confirmButtonText: '返回编辑 (推荐)',
+          cancelButtonText: '彻底重置并删除',
+          type: 'info'
+        }
+      );
+      // 用户选择“返回编辑”
+      evalStore.setStep(2);
+      return;
+    } catch (action) {
+      if (action === 'cancel' && _currentEvaluationId) {
+        // 用户选择“彻底重置”
+        await evalStore.discardEvaluation(_currentEvaluationId);
+        _currentEvaluationId = null;
+        evalStore.reset();
+      }
+      return;
     }
   }
   evalStore.reset();
+  _currentEvaluationId = null;
 };
 
 const getScoreColor = (score: number) => {
@@ -1558,5 +1611,22 @@ const viewProject = (project: any) => {
 @keyframes pulse-blue {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.7; transform: scale(1.1); }
+}
+
+.parsed-editor-mini :deep(.el-textarea__inner) {
+  background: #fdfdfd;
+  border: 1px solid #eef2ff;
+  border-radius: 12px;
+  padding: 1rem;
+  font-family: inherit;
+  font-size: 13px;
+  color: #4b5563;
+  line-height: 1.6;
+}
+
+.parsed-editor-mini :deep(.el-textarea__inner:focus) {
+  background: white;
+  border-color: #3b82f6;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.05);
 }
 </style>

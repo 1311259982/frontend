@@ -144,6 +144,22 @@ export const getEvaluationStatus = (id: number): Promise<{
 };
 
 /**
+ * 更新评估任务内容并可选地重测
+ * PUT /api/evaluations/{id}
+ */
+export const updateEvaluation = (id: number, payload: { text_content: string, reevaluate?: boolean, standard_ids?: number[] }): Promise<any> => {
+  return http.put(`/api/evaluations/${id}`, payload);
+};
+
+/**
+ * 彻底取消并物理清理评估任务
+ * DELETE /api/evaluations/{id}
+ */
+export const cancelEvaluation = (id: number): Promise<void> => {
+  return http.delete(`/api/evaluations/${id}`);
+};
+
+/**
  * 获取评估历史列表
  * GET /api/evaluations
  */
@@ -194,6 +210,14 @@ export const createBaseline = (payload: CreateBaselinePayload): Promise<any> => 
  */
 export const deleteBaseline = (id: number): Promise<void> => {
   return http.delete(`/api/baselines/${id}`);
+};
+
+/**
+ * 获取基准需求的合并全文
+ * GET /api/baselines/{id}/content
+ */
+export const getBaselineContent = (id: number): Promise<{ content: string }> => {
+  return http.get(`/api/baselines/${id}/content`);
 };
 
 // ─────────────────────────────────────────────
@@ -256,12 +280,20 @@ export const updateStandardStatus = (standardId: number, status: string): Promis
  * 上传需求文档（用于文档模式评估）
  * POST /api/uploads/requirement
  */
-export const uploadRequirementFile = (file: File): Promise<{ file_id: number; name: string; size: string }> => {
+export const uploadRequirementFile = (file: File): Promise<{ file_id: number; name: string; size: string; parsed_text?: string }> => {
   const formData = new FormData();
   formData.append('file', file);
   return http.post('/api/uploads/requirement', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
+};
+
+/**
+ * 移除已上传的需求文档（物理删除）
+ * DELETE /api/uploads/{fileId}
+ */
+export const deleteUpload = (fileId: number): Promise<void> => {
+  return http.delete(`/api/uploads/${fileId}`);
 };
 
 // ─────────────────────────────────────────────

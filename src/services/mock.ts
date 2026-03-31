@@ -180,6 +180,18 @@ export const cancelEvaluation = async (id: number): Promise<void> => {
 };
 
 /**
+ * 模拟更新评估内容
+ */
+export const updateEvaluation = async (id: number, payload: { text_content: string; reevaluate?: boolean; standard_ids?: number[] }): Promise<any> => {
+    await delay(300);
+    const evaluation = _evaluations.find(e => e.id === id);
+    if (evaluation) {
+        evaluation.textContent = payload.text_content;
+    }
+    return { success: true, message: '模拟更新成功' };
+};
+
+/**
  * 获取评估历史列表（内存模拟数据）
  */
 export const getEvaluations = async (): Promise<any[]> => {
@@ -271,6 +283,15 @@ export const createBaseline = async (payload: CreateBaselinePayload): Promise<an
 };
 
 /**
+ * 获取基准需求的合并全文
+ */
+export const getBaselineContent = async (id: number): Promise<{ content: string }> => {
+    await delay(200);
+    const baseline = _baselines.find(f => f.id === id);
+    return { content: baseline?.full_content || '这是模拟的基准需求全文内容...' };
+};
+
+/**
  * 删除基准需求（及其子版本）
  */
 export const deleteBaseline = async (id: number): Promise<void> => {
@@ -292,9 +313,14 @@ export const uploadStandardFile = async (categoryId: number, file: File): Promis
     return { file_id: genId(), name: file.name, size: `${(file.size / 1024).toFixed(2)} KB` };
 };
 
-export const uploadRequirementFile = async (file: File): Promise<{ file_id: number; name: string; size: string }> => {
+export const uploadRequirementFile = async (file: File): Promise<{ file_id: number; name: string; size: string; parsed_text?: string }> => {
     await delay(500);
-    return { file_id: genId(), name: file.name, size: `${(file.size / 1024).toFixed(2)} KB` };
+    return { 
+        file_id: genId(), 
+        name: file.name, 
+        size: `${(file.size / 1024).toFixed(2)} KB`,
+        parsed_text: `这是从模拟文件 ${file.name} 中解析出的文本内容...\n1. 需求点 A\n2. 需求点 B`
+    };
 };
 
 export const createCategory = async (payload: { name: string; type: string }): Promise<any> => {
@@ -311,4 +337,12 @@ export const deleteStandardFile = async (_id: number): Promise<void> => {
 
 export const updateStandardStatus = async (_id: number, _status: string): Promise<void> => {
     return;
+};
+
+/**
+ * 移除上传需求文档（Mock 物理删除）
+ */
+export const deleteUpload = async (fileId: number): Promise<void> => {
+    await delay(200);
+    console.log(`[Mock] Deleting upload file_id=${fileId}`);
 };

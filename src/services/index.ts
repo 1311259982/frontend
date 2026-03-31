@@ -36,6 +36,9 @@ export const {
     getBaselines,
     createBaseline,
     deleteBaseline,
+    getBaselineContent,
+    updateEvaluation,
+    cancelEvaluation,
     getStandards,
     uploadStandardFile,
     uploadRequirementFile,
@@ -43,6 +46,7 @@ export const {
     deleteCategory,
     deleteStandardFile,
     updateStandardStatus,
+    deleteUpload,
 } = service;
 
 // 仅 mock 有的额外函数（不影响 api 模式）
@@ -50,13 +54,8 @@ export const createEvaluation = isMock
     ? mockService.createEvaluation
     : (_record: any) => Promise.resolve(_record); // real: server creates from startEvaluation response
 
-export const deleteEvaluation = isMock
-    ? mockService.deleteEvaluation
-    : apiService.deleteBaseline as any; // placeholder; real backend has equivalent DELETE endpoint
-
-export const cancelEvaluationMock = isMock
-    ? mockService.cancelEvaluation
-    : async (_id: number) => { }; // real: cancel via DELETE /api/evaluations/{id}
+// 适配取消评估的命名（UI 原本调用的是 cancelEvaluationMock）
+export const cancelEvaluationMock = cancelEvaluation;
 
 // 导出种子数据（仅 mock 模式下有效，用于 store 初始化）
 export const seedData = isMock
