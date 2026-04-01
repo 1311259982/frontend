@@ -60,7 +60,9 @@ export function useBaselineActions() {
         }
 
         // 核心同步：手动触发数据拉取，确保侧边栏刷新
+        baselineStore.isLoaded = false;
         await baselineStore.fetchBaselines();
+        evalStore.isHistoryLoaded = false;
         await evalStore.fetchHistory();
 
         ElMessage.success('已成功归档至基准需求库');

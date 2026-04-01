@@ -77,7 +77,11 @@
                 v-for="versionItem in [base.versions.find(v => v.id === selectedVersions[base.id]) || base]"
                 :key="versionItem.id"
                 class="bg-white p-5 rounded-lg shadow-sm border-l-4 border-l-blue-400 hover:shadow-md transition-all duration-300 cursor-pointer group relative"
-                @click="loadHistory({...versionItem, title: versionItem.title || base.name, total_score: versionItem.score || base.score})"
+                @click="() => {
+                  const matchedEval = base.history && base.history.find((h: any) => h.version === versionItem.version || (h.parent_base_id === versionItem.parent_base_id && versionItem.parent_base_id));
+                  if (matchedEval) emit('loadHistory', matchedEval);
+                  else ElMessage.warning('未找到该版本对应的评估明细记录，可使用左侧「查看文档」按钮查阅基准详情');
+                }"
               >
                 <h4 class="text-sm font-bold text-gray-800 line-clamp-1 mb-2 pr-8">{{ versionItem.title || base.name }}</h4>
                 <div class="flex items-center justify-between">
@@ -85,13 +89,17 @@
                 </div>
                 <div class="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
                   <el-button size="small" circle icon="Notebook" type="success" plain @click.stop="$router.push({ name: 'BaselineDetail', params: { versionId: versionItem.id }, query: { project: base.name, title: versionItem.title || base.name, version: versionItem.version } })" />
-                  <el-button size="small" circle icon="View" type="primary" plain @click.stop="loadHistory({...versionItem, title: versionItem.title || base.name, total_score: versionItem.score || base.score})" />
+                  <el-button size="small" circle icon="View" type="primary" plain @click.stop="() => {
+                    const matchedEval = base.history && base.history.find((h: any) => h.version === versionItem.version || (h.parent_base_id === versionItem.parent_base_id && versionItem.parent_base_id));
+                    if (matchedEval) emit('loadHistory', matchedEval);
+                    else ElMessage.warning('无法找到该版本对应的评估明细记录');
+                  }" />
                 </div>
               </div>
 
               <!-- Child Items -->
               <div 
-                v-for="item in base.history" 
+                v-for="item in filteredHistory(base)" 
                 :key="item.id"
                 class="bg-white p-5 rounded-lg shadow-sm border border-gray-100 hover:border-blue-300 hover:shadow-md transition-all duration-300 cursor-pointer group relative"
                 @click="loadHistory(item)"
@@ -157,11 +165,24 @@ const getScoreType = (score: number) => {
   return 'danger';
 };
 
+const filteredHistory = (base: any) => {
+  const selectedId = selectedVersions[base.id] || base.id;
+  if (!base.history) return [];
+  
+  return base.history.filter((h: any) => h.parent_base_id === selectedId);
+};
+
 const handleVersionChange = (base: any, versionId: number) => {
   const selectedVersion = base.versions.find((v: any) => v.id === versionId);
   if (selectedVersion) {
     base.score = selectedVersion.score || base.score;
     ElMessage.info(`已切换到版本: ${selectedVersion.version}`);
+    
+    // 切换下拉框时，自动在左侧面板加载并且展示该版本的评估记录以示区分
+    const matchedEval = base.history && base.history.find((h: any) => h.version === selectedVersion.version || (h.parent_base_id === selectedVersion.parent_base_id && selectedVersion.parent_base_id));
+    if (matchedEval) {
+      emit('loadHistory', matchedEval);
+    }
   }
 };
 
