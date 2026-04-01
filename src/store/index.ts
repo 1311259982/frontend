@@ -397,13 +397,15 @@ export const useBaselineStore = defineStore('baseline', {
       if (this.isLoaded) return;
       try {
         const baselines = await getBaselines();
-        // 将数据按 categoryType 分发到对应分类
-        const defaultCat = this.categories.find(c => c.id === 1);
-        const userCat = this.categories.find(c => c.id === 2);
+        // 强制幂等：在填充前先清空旧数据，防止重复叠加
+        this.categories.forEach(c => c.files = []);
+        
         baselines.forEach(b => {
           if (b.categoryType === 'default' || b.scope === 'public') {
+            const defaultCat = this.categories.find(c => c.id === 1);
             defaultCat?.files.push(b);
           } else {
+            const userCat = this.categories.find(c => c.id === 2);
             userCat?.files.push(b);
           }
         });
@@ -443,6 +445,8 @@ export const useBaselineStore = defineStore('baseline', {
           }
           cat.files.unshift(newBaseline);
         }
+        // 关键：标记为未加载，确保下一次 UI 请求或强制刷新时能拿到后端生成的最新版本链
+        this.isLoaded = false;
         return newBaseline;
       } catch (e) {
         console.error('[BaselineStore] addBaseline failed:', e);
@@ -539,14 +543,16 @@ export const useEvaluationStore = defineStore('evaluation', {
         return { ...base, history: familyHistory };
       });
 
-      const independentGrouped = independent.filter(i => !i.is_archived).reduce((groups: Record<string, any[]>, item) => {
-        const projectName = item.projectName || '未命名项目';
-        if (!groups[projectName]) groups[projectName] = [];
-        groups[projectName].push(item);
-        return groups;
-      }, {});
-
-      const independentByProject = (Object.entries(independentGrouped) as [string, any[]][])
+      const independentByProject = (Object.entries(
+        independent
+          .filter(i => !i.is_archived && !i.parent_base_id)
+          .reduce((groups: Record<string, any[]>, item) => {
+            const projectName = item.projectName || '未命名项目';
+            if (!groups[projectName]) groups[projectName] = [];
+            groups[projectName].push(item);
+            return groups;
+          }, {})
+      ) as [string, any[]][])
         .map(([projectName, items]) => ({
           projectName,
           items: (items as any[]).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -568,7 +574,7 @@ export const useEvaluationStore = defineStore('evaluation', {
       if (this.isHistoryLoaded) return;
       try {
         const evaluations = await getEvaluations();
-        this.history = evaluations;
+        this.history = evaluations; // 直接赋值实现原子刷新，避免使用 push 导致重复
         this.isHistoryLoaded = true;
       } catch (e) {
         console.error('[EvaluationStore] fetchHistory failed:', e);
@@ -662,9 +668,7 @@ export const useEvaluationStore = defineStore('evaluation', {
 
       const newRecord = {
         projectName,
-        title: this.requirementType === 'document'
-          ? this.uploadedFile?.name
-          : (this.requirementTitle || this.textContent.slice(0, 15) + '...'),
+        title: this.requirementTitle || (this.requirementType === 'document' ? this.uploadedFile?.name : this.textContent.slice(0, 15) + '...'),
         total_score: report.total_score || report.score,
         date: new Date().toISOString().split('T')[0],
         model: report.model_used || 'GPT-4o',

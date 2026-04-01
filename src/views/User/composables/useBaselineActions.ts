@@ -59,6 +59,10 @@ export function useBaselineActions() {
           evalStore.currentReport.is_archived = true;
         }
 
+        // 核心同步：手动触发数据拉取，确保侧边栏刷新
+        await baselineStore.fetchBaselines();
+        await evalStore.fetchHistory();
+
         ElMessage.success('已成功归档至基准需求库');
       } catch (e: any) {
         ElMessage.error(`归档失败：${e.message || '未知错误'}`);

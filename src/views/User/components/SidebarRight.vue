@@ -74,16 +74,18 @@
             <div class="space-y-3 p-3 bg-gray-50/70 rounded-b-xl">
               <!-- Parent Item (The Baseline itself) -->
               <div 
+                v-for="versionItem in [base.versions.find(v => v.id === selectedVersions[base.id]) || base]"
+                :key="versionItem.id"
                 class="bg-white p-5 rounded-lg shadow-sm border-l-4 border-l-blue-400 hover:shadow-md transition-all duration-300 cursor-pointer group relative"
-                @click="loadHistory({...base, title: base.name, total_score: base.score})"
+                @click="loadHistory({...versionItem, title: versionItem.title || base.name, total_score: versionItem.score || base.score})"
               >
-                <h4 class="text-sm font-bold text-gray-800 line-clamp-1 mb-2 pr-8">{{ base.title || base.name }}</h4>
+                <h4 class="text-sm font-bold text-gray-800 line-clamp-1 mb-2 pr-8">{{ versionItem.title || base.name }}</h4>
                 <div class="flex items-center justify-between">
-                  <span class="text-xs text-gray-500">{{ base.date }}</span>
+                  <span class="text-xs text-gray-500">{{ versionItem.date || versionItem.created_at?.split('T')[0] }}</span>
                 </div>
                 <div class="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
-                  <el-button size="small" circle icon="Notebook" type="success" plain @click.stop="$router.push({ name: 'BaselineDetail', params: { versionId: base.id }, query: { project: base.name, version: base.version } })" />
-                  <el-button size="small" circle icon="View" type="primary" plain @click.stop="loadHistory({...base, title: base.name, total_score: base.score})" />
+                  <el-button size="small" circle icon="Notebook" type="success" plain @click.stop="$router.push({ name: 'BaselineDetail', params: { versionId: versionItem.id }, query: { project: base.name, title: versionItem.title || base.name, version: versionItem.version } })" />
+                  <el-button size="small" circle icon="View" type="primary" plain @click.stop="loadHistory({...versionItem, title: versionItem.title || base.name, total_score: versionItem.score || base.score})" />
                 </div>
               </div>
 
@@ -122,7 +124,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue';
+import { ref, reactive, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useEvaluationStore, useBaselineStore } from '@/store';
 import { Timer, Expand, Search, Filter, Connection, Plus, Delete, Fold, Notebook, View, DataBoard } from '@element-plus/icons-vue';
@@ -138,6 +140,16 @@ const router = useRouter();
 const historySearch = ref('');
 const activeHistoryNames = ref('');
 const selectedVersions = reactive<Record<string, number>>({});
+
+// 自动锁定每个项目的最新版本
+watch(() => evalStore.aggregatedHistory.baselines, (newBaselines) => {
+  newBaselines.forEach(base => {
+    if (!selectedVersions[base.id] && base.versions && base.versions.length > 0) {
+      // 默认选中第一项（即最新的版本号，因为 baselineTree 已按版本倒序排列）
+      selectedVersions[base.id] = base.versions[0].id;
+    }
+  });
+}, { immediate: true, deep: true });
 
 const getScoreType = (score: number) => {
   if (score >= 80) return 'success';
