@@ -36,6 +36,7 @@ export const {
     getBaselines,
     createBaseline,
     deleteBaseline,
+    getDeletePreview,
     getBaselineContent,
     updateEvaluation,
     cancelEvaluation,

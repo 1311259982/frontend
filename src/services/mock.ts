@@ -299,6 +299,35 @@ export const deleteBaseline = async (id: number): Promise<void> => {
     _baselines = _baselines.filter(f => f.id !== id && f.parent_base_id !== id);
 };
 
+/**
+ * 删除预览（Mock：直接返回简单的影响分析）
+ */
+export const getDeletePreview = async (id: number): Promise<{
+    target_version: string;
+    affected_count: number;
+    affected_versions: string[];
+    will_delete_project: boolean;
+}> => {
+    await delay(100);
+    const target = _baselines.find(f => f.id === id);
+    if (!target) throw new Error('基准需求不存在');
+
+    // 找出所有子版本（仅一级，mock 不做深度递归）
+    const children = _baselines.filter(f => f.parent_base_id === id);
+    const affected = [target, ...children];
+    const sameProject = _baselines.filter(f =>
+        f.id === id || f.parent_base_id === id ||
+        (target.parent_base_id && (f.id === target.parent_base_id || f.parent_base_id === target.parent_base_id))
+    );
+
+    return {
+        target_version: target.version,
+        affected_count: affected.length,
+        affected_versions: affected.map(f => f.version),
+        will_delete_project: affected.length >= sameProject.length,
+    };
+};
+
 // ─────────────────────────────────────────────
 // 评估标准相关 Mock
 // ─────────────────────────────────────────────

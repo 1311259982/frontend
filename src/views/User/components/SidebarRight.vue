@@ -65,7 +65,7 @@
                     type="danger" 
                     plain 
                     class="flex items-center justify-center !ml-0"
-                    @click.stop="deleteBaseline(base)" 
+                    @click.stop="deleteBaseline(base, selectedVersions[base.id])" 
                   />
                 </div>
               </div>
@@ -193,15 +193,17 @@ const handleBaselineReference = (base: any) => {
   ElMessage.success(`已引用基准需求: ${base.name} (包含 ${base.history.filter((h: any) => h.is_archived).length} 个已归档子版本)`);
 };
 
-const deleteBaseline = (base: any) => {
-  // Logic already exists in composable, but here we can emit or use state.
-  // We'll emit to let the parent handle the MessageBox if we want strict decomposition,
-  // but since we have store, we can also use store here.
-  // To match the original code completely, we'll emit.
-  emit('deleteBaseline', base);
+const deleteBaseline = (base: any, versionId?: number) => {
+  emit('deleteBaseline', base, versionId);
 };
 
-const emit = defineEmits(['toggle', 'resize', 'loadHistory', 'referenceBaseline', 'deleteBaseline']);
+const emit = defineEmits<{
+  toggle: [];
+  resize: [e: MouseEvent];
+  loadHistory: [item: any];
+  referenceBaseline: [base: any];
+  deleteBaseline: [base: any, versionId?: number];
+}>();
 
 const loadHistory = (item: any) => {
   emit('loadHistory', item);

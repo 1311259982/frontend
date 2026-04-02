@@ -1,5 +1,6 @@
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { useBaselineStore, useEvaluationStore, useKnowledgeStore } from '@/store';
+import { getDeletePreview } from '@/services';
 
 export function useBaselineActions() {
   const baselineStore = useBaselineStore();
@@ -13,16 +14,62 @@ export function useBaselineActions() {
     }
   };
 
-  const deleteBaseline = (base: any) => {
-    ElMessageBox.confirm(`确定要删除基准需求 "${base.name}" 及其所有历史版本吗？`, '警告', {
-      type: 'warning',
-      confirmButtonText: '确定删除',
-      cancelButtonText: '取消'
-    }).then(() => {
-      baselineStore.removeBaseline(base.id);
-      evalStore.history = evalStore.history.filter(h => h.parent_base_id !== base.id && h.id !== base.id);
-      ElMessage.success('基准需求及关联历史已删除');
-    }).catch(() => {});
+  /**
+   * 删除某个精确版本（及其所有子孙版本）。
+   * @param base         整个项目基准对象（用于展示项目名）
+   * @param versionId    当前选中的具体版本 ID（精准删除目标）
+   */
+  const deleteBaseline = async (base: any, versionId?: number) => {
+    // 如果没传 versionId，则取 base 根节点 ID（兜底：删整个项目）
+    const targetId = versionId ?? base.id;
+
+    try {
+      // 1. 先向后端查询删除影响范围
+      const preview = await getDeletePreview(targetId);
+
+      // 2. 根据影响范围选择三档不同的弹窗
+      let confirmMessage = '';
+      let confirmType: 'warning' | 'error' = 'warning';
+      let confirmTitle = '删除确认';
+
+      if (preview.will_delete_project && preview.affected_count === 1) {
+        // 场景 A：这是项目最后一个版本，删完项目将完全消失
+        confirmTitle = '⚠️ 删除最终版本';
+        confirmMessage = `您正在删除 <b>${base.name}</b> 的最后一个版本 <b>${preview.target_version}</b>。\n\n删除后该项目将从评估历史中完全移除，此操作不可撤销。`;
+        confirmType = 'error';
+      } else if (preview.affected_count > 1) {
+        // 场景 B：该版本存在子孙版本，将被级联删除
+        const childList = preview.affected_versions.join('、');
+        confirmTitle = '⚠️ 级联删除警告';
+        confirmMessage = `您正在删除 <b>${base.name}</b> 的 <b>${preview.target_version}</b> 版本。\n\n由于该版本下存在 <b>${preview.affected_count - 1}</b> 个子版本（${childList}），它们将被一并级联删除。\n\n此操作不可撤销！`;
+        confirmType = 'warning';
+      } else {
+        // 场景 C：叶子节点，简单提示
+        confirmTitle = '删除版本';
+        confirmMessage = `确定删除 <b>${base.name}</b> 的 <b>${preview.target_version}</b> 版本吗？\n\n此操作不可撤销。`;
+        confirmType = 'warning';
+      }
+
+      await ElMessageBox.confirm(confirmMessage, confirmTitle, {
+        type: confirmType,
+        dangerouslyUseHTMLString: true,
+        confirmButtonText: preview.will_delete_project ? '确定删除项目' : '确定删除',
+        cancelButtonText: '取消',
+        confirmButtonClass: preview.affected_count > 1 ? 'el-button--danger' : '',
+      });
+
+      // 3. 用户确认后执行删除
+      await baselineStore.removeBaseline(targetId);
+      ElMessage.success(
+        preview.will_delete_project
+          ? `项目 "${base.name}" 已完全删除`
+          : `版本 ${preview.target_version} 及其 ${preview.affected_count > 1 ? `${preview.affected_count - 1} 个子版本` : ''} 已删除`
+      );
+    } catch (e: any) {
+      // ElMessageBox.confirm 取消时会 reject，这里区分取消和真实错误
+      if (e === 'cancel' || e?.action === 'cancel' || e?.message === 'cancel') return;
+      ElMessage.error(`删除失败：${e?.message || '请检查网络或联系管理员'}`);
+    }
   };
 
   const openArchiveDialog = (historyItem?: any) => {

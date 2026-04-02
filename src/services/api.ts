@@ -205,11 +205,25 @@ export const createBaseline = (payload: CreateBaselinePayload): Promise<any> => 
 };
 
 /**
- * 删除基准需求（及其所有子版本）
+ * 删除基准需求（精准子树级联删除）
  * DELETE /api/baselines/{id}
  */
 export const deleteBaseline = (id: number): Promise<void> => {
   return http.delete(`/api/baselines/${id}`);
+};
+
+/**
+ * 删除预览：查询删除某版本将波及哪些子孙版本
+ * GET /api/baselines/{id}/delete-preview
+ */
+export interface DeletePreview {
+  target_version: string;
+  affected_count: number;
+  affected_versions: string[];
+  will_delete_project: boolean;
+}
+export const getDeletePreview = (id: number): Promise<DeletePreview> => {
+  return http.get(`/api/baselines/${id}/delete-preview`);
 };
 
 /**

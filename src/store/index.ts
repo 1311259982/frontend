@@ -462,14 +462,15 @@ export const useBaselineStore = defineStore('baseline', {
     },
 
     /**
-     * 删除基准需求（调用 service 层，同步更新本地状态）
+     * 删除基准需求（调用 service 层，强制重新拉取列表确保状态一致）
      */
-    async removeBaseline(fileId: number) {
+    async removeBaseline(versionId: number) {
       try {
-        await deleteBaseline(fileId);
-        this.categories.forEach(cat => {
-          cat.files = cat.files.filter(f => f.id !== fileId && f.parent_base_id !== fileId);
-        });
+        await deleteBaseline(versionId);
+        // 强制重新拉取，而不是局部过滤（防止级联删除后幽灵节点残留）
+        this.isLoaded = false;
+        this.categories.forEach(cat => { cat.files = []; });
+        await this.fetchBaselines();
       } catch (e) {
         console.error('[BaselineStore] removeBaseline failed:', e);
         throw e;
