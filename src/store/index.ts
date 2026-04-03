@@ -380,7 +380,7 @@ export const useBaselineStore = defineStore('baseline', {
       const roots = all.filter(f => !f.parent_base_id);
       return roots.map(root => {
         const versions = all.filter(f => f.parent_base_id === root.id || f.id === root.id)
-          .sort((a, b) => b.version.localeCompare(a.version));
+          .sort((a, b) => b.version.localeCompare(a.version, undefined, { numeric: true }));
         return {
           ...root,
           versions

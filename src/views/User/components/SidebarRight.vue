@@ -39,7 +39,7 @@
                       <span class="text-sm font-bold text-gray-800 truncate min-w-0 leading-tight">{{ base.name }}</span>
                       <el-tag size="small" :type="getScoreType(base.score)" class="text-xs font-bold whitespace-nowrap">{{ base.score }}</el-tag>
                     </div>
-                    <el-select v-if="base.versions" v-model="selectedVersions[base.id]" size="small" class="!w-[100px]" @change="handleVersionChange(base, $event)" placeholder="选择版本">
+                    <el-select v-if="base.versions" v-model="selectedVersions[base.id]" size="small" class="!w-[125px]" @change="handleVersionChange(base, $event)" placeholder="选择版本">
                       <el-option 
                         v-for="version in base.versions" 
                         :key="version.id" 
@@ -56,7 +56,7 @@
                     icon="Plus" 
                     type="primary" 
                     class="flex items-center justify-center !ml-0"
-                    @click.stop="handleBaselineReference(base)" 
+                    @click.stop="handleBaselineReference(base.versions && base.versions.find(v => v.id === selectedVersions[base.id]) || base)" 
                   />
                   <el-button 
                     size="small" 
@@ -76,24 +76,16 @@
               <div 
                 v-for="versionItem in [base.versions.find(v => v.id === selectedVersions[base.id]) || base]"
                 :key="versionItem.id"
-                class="bg-white p-5 rounded-lg shadow-sm border-l-4 border-l-blue-400 hover:shadow-md transition-all duration-300 cursor-pointer group relative"
-                @click="() => {
-                  const matchedEval = base.history && base.history.find((h: any) => h.version === versionItem.version || (h.parent_base_id === versionItem.parent_base_id && versionItem.parent_base_id));
-                  if (matchedEval) emit('loadHistory', matchedEval);
-                  else ElMessage.warning('未找到该版本对应的评估明细记录，可使用左侧「查看文档」按钮查阅基准详情');
-                }"
+                class="bg-white p-5 rounded-lg shadow-sm border-l-4 border-l-blue-400 transition-all duration-300 group relative"
               >
-                <h4 class="text-sm font-bold text-gray-800 line-clamp-1 mb-2 pr-8">{{ versionItem.title || base.name }}</h4>
+                <div class="flex items-start justify-between absolute right-3 top-3">
+                  <el-tooltip content="查阅此版本基准文档全貌" placement="top">
+                    <el-button size="small" circle icon="Notebook" type="success" plain @click.stop="$router.push({ name: 'BaselineDetail', params: { versionId: versionItem.id }, query: { project: base.name, title: versionItem.title || base.name, version: versionItem.version } })" />
+                  </el-tooltip>
+                </div>
+                <h4 class="text-sm font-bold text-gray-800 line-clamp-1 mb-2 pr-8">{{ versionItem.title || base.name }} <el-tag size="small" type="info" class="ml-2 !scale-90 origin-left">版本总览</el-tag></h4>
                 <div class="flex items-center justify-between">
                   <span class="text-xs text-gray-500">{{ versionItem.date || versionItem.created_at?.split('T')[0] }}</span>
-                </div>
-                <div class="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
-                  <el-button size="small" circle icon="Notebook" type="success" plain @click.stop="$router.push({ name: 'BaselineDetail', params: { versionId: versionItem.id }, query: { project: base.name, title: versionItem.title || base.name, version: versionItem.version } })" />
-                  <el-button size="small" circle icon="View" type="primary" plain @click.stop="() => {
-                    const matchedEval = base.history && base.history.find((h: any) => h.version === versionItem.version || (h.parent_base_id === versionItem.parent_base_id && versionItem.parent_base_id));
-                    if (matchedEval) emit('loadHistory', matchedEval);
-                    else ElMessage.warning('无法找到该版本对应的评估明细记录');
-                  }" />
                 </div>
               </div>
 
@@ -167,30 +159,26 @@ const getScoreType = (score: number) => {
 
 const filteredHistory = (base: any) => {
   const selectedId = selectedVersions[base.id] || base.id;
+  const selectedVersion = base.versions?.find((v: any) => v.id === selectedId) || base;
   if (!base.history) return [];
   
-  return base.history.filter((h: any) => h.parent_base_id === selectedId);
+  // 改为按版本号强制直观并类以确保正确区分并展现用户在那个阶段做出的所有相关批次内容
+  return base.history.filter((h: any) => h.version === selectedVersion.version);
 };
 
 const handleVersionChange = (base: any, versionId: number) => {
   const selectedVersion = base.versions.find((v: any) => v.id === versionId);
   if (selectedVersion) {
     base.score = selectedVersion.score || base.score;
-    ElMessage.info(`已切换到版本: ${selectedVersion.version}`);
-    
-    // 切换下拉框时，自动在左侧面板加载并且展示该版本的评估记录以示区分
-    const matchedEval = base.history && base.history.find((h: any) => h.version === selectedVersion.version || (h.parent_base_id === selectedVersion.parent_base_id && selectedVersion.parent_base_id));
-    if (matchedEval) {
-      emit('loadHistory', matchedEval);
-    }
+    ElMessage.info(`工作视图已切换到环境版本: ${selectedVersion.version}`);
   }
 };
 
-const handleBaselineReference = (base: any) => {
+const handleBaselineReference = (versionItem: any) => {
   evalStore.clearBaselines();
-  evalStore.toggleBaseline(base.id);
+  evalStore.toggleBaseline(versionItem.id);
   evalStore.setStep(2);
-  ElMessage.success(`已引用基准需求: ${base.name} (包含 ${base.history.filter((h: any) => h.is_archived).length} 个已归档子版本)`);
+  ElMessage.success(`已引用基准版本: ${versionItem.version || versionItem.name}`);
 };
 
 const deleteBaseline = (base: any, versionId?: number) => {
