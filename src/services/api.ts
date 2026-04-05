@@ -110,11 +110,12 @@ export interface ArchivePayload {
 export interface CreateBaselinePayload {
   name: string;
   title: string;
-  desc: string;
+  desc?: string;
   score: number;
-  scope: 'public' | 'private';
-  parent_base_id: number | null;
-  full_content: string;
+  scope?: string;
+  parent_base_id?: number | null;
+  full_content?: string;
+  source_evaluation_id?: number | null;
 }
 
 // ─────────────────────────────────────────────

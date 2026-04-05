@@ -378,9 +378,23 @@ export const useBaselineStore = defineStore('baseline', {
     baselineTree(state) {
       const all = this.allFiles;
       const roots = all.filter(f => !f.parent_base_id);
+
+      const getFamilyIds = (parentId: number, currentIds: number[]): number[] => {
+         const children = all.filter(f => f.parent_base_id === parentId).map(c => c.id);
+         if (children.length === 0) return currentIds;
+         let ids = [...currentIds, ...children];
+         children.forEach(childId => {
+            ids = getFamilyIds(childId, ids);
+         });
+         return ids;
+      };
+
       return roots.map(root => {
-        const versions = all.filter(f => f.parent_base_id === root.id || f.id === root.id)
+        const familyIds = Array.from(new Set(getFamilyIds(root.id, [root.id])));
+
+        const versions = all.filter(f => familyIds.includes(f.id))
           .sort((a, b) => b.version.localeCompare(a.version, undefined, { numeric: true }));
+          
         return {
           ...root,
           versions
@@ -428,6 +442,7 @@ export const useBaselineStore = defineStore('baseline', {
           scope: file.scope || 'private',
           parent_base_id: file.parent_base_id || null,
           full_content: file.full_content || '',
+          source_evaluation_id: file.source_evaluation_id || null,
         });
 
         const cat = this.categories.find(c => c.id === categoryId);

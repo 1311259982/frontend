@@ -97,7 +97,8 @@ export function useBaselineActions() {
           score: target.total_score || target.score,
           scope: 'private',
           parent_base_id: parentId,
-          full_content: evalStore.textContent
+          full_content: evalStore.textContent,
+          source_evaluation_id: target.id  // 关键：传入评估ID供后端排除干扰并同步版本
         });
 
         if (historyItem) {
@@ -150,7 +151,8 @@ export function useBaselineActions() {
         score: target.total_score || target.score,
         scope: 'private',
         parent_base_id: parentId,
-        full_content: evalStore.textContent 
+        full_content: evalStore.textContent,
+        source_evaluation_id: target.id  // 关键：传入评估ID供后端排除干扰并同步版本
       });
       
       evalStore.currentReport.is_archived = true;
