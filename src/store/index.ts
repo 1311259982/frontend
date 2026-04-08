@@ -6,7 +6,7 @@ import {
   archiveEvaluation, getStandards, uploadStandardFile,
   createCategory, deleteCategory, deleteStandardFile, seedData,
   updateStandardStatus, uploadRequirementFile,
-  deleteUpload, getBaselineContent
+  deleteUpload, getBaselineItems
 } from '@/services';
 
 // ─────────────────────────────────────────────
@@ -512,6 +512,9 @@ export const useEvaluationStore = defineStore('evaluation', {
     evaluationProgress: 0,
     currentReport: null as any,
     onlyEvaluateNew: false,
+    editMode: 'incremental' as 'incremental' | 'full',
+    baselineContentItem: '',
+    items: [] as any[], // NEW: 卡片流列表
     /**
      * 评估历史记录。
      * 初始为空，通过 fetchHistory() 从 service 层加载。
@@ -605,15 +608,25 @@ export const useEvaluationStore = defineStore('evaluation', {
       const index = this.referencedBaselineIds.indexOf(id);
       if (index > -1) {
         this.referencedBaselineIds.splice(index, 1);
+        this.baselineContentItem = '';
         this.textContent = ''; // Clear if unselected
+        this.editMode = 'incremental';
       } else {
         this.referencedBaselineIds = [id];
-        // NEW: Fetch and seed the baseline content immediately
+        this.editMode = 'incremental';
+        this.textContent = '';
+        this.items = []; // Clear current items
         try {
-          const { content } = await getBaselineContent(id);
-          this.textContent = content;
+          const fetchedItems = await getBaselineItems(id);
+          this.items = fetchedItems.map((item: any) => ({
+            parent_item_id: item.id,
+            title: item.title,
+            content: item.content,
+            status: 'unchanged',
+            sort_order: item.sort_order
+          }));
         } catch (e) {
-          console.error('[EvaluationStore] Failed to fetch baseline content:', e);
+          console.error('[EvaluationStore] Failed to fetch baseline items:', e);
         }
       }
       if (this.referencedBaselineIds.length === 0) {
@@ -621,9 +634,56 @@ export const useEvaluationStore = defineStore('evaluation', {
       }
     },
 
+    unlockBaselineToEditor() {
+      this.editMode = 'full';
+      if (this.textContent.trim()) {
+        this.textContent = this.baselineContentItem + '\n\n' + this.textContent;
+      } else {
+        this.textContent = this.baselineContentItem;
+      }
+    },
+
+    addItem(title: string, content: string) {
+      this.items.push({
+        parent_item_id: null,
+        title,
+        content,
+        status: 'new',
+        sort_order: this.items.length
+      });
+    },
+
+    updateItem(index: number, title: string, content: string) {
+      if (this.items[index]) {
+        this.items[index].title = title;
+        this.items[index].content = content;
+        if (this.items[index].status === 'unchanged') {
+          this.items[index].status = 'modified';
+        }
+      }
+    },
+
+    toggleDeleteItem(index: number) {
+      if (this.items[index]) {
+        if (this.items[index].status === 'new') {
+          // If it's pure new, just remove it
+          this.items.splice(index, 1);
+        } else if (this.items[index].status === 'deleted') {
+          // Restore
+          this.items[index].status = this.items[index].parent_item_id ? 'unchanged' : 'new';
+        } else {
+          // Mark as deleted
+          this.items[index].status = 'deleted';
+        }
+      }
+    },
+
     clearBaselines() {
       this.referencedBaselineIds = [];
       this.onlyReference = false;
+      this.baselineContentItem = '';
+      this.items = [];
+      this.editMode = 'incremental';
     },
 
     reset() {
@@ -637,6 +697,9 @@ export const useEvaluationStore = defineStore('evaluation', {
       this.currentReport = null;
       this.currentStep = 1;
       this.onlyEvaluateNew = false;
+      this.baselineContentItem = '';
+      this.items = [];
+      this.editMode = 'incremental';
     },
 
     /**
@@ -692,11 +755,12 @@ export const useEvaluationStore = defineStore('evaluation', {
         hasReference: references.length > 0,
         references,
         parent_base_id: parentBase ? parentBase.id : null,
-        task_type: references.length > 0 ? 'incremental' : 'full',
+        task_type: references.length > 0 ? (this.editMode === 'full' ? 'full_rebaseline' : 'incremental') : 'full',
         is_archived: false,
         version,
         issues: report.issues || [],
         suggestions: report.suggestions || '',
+        edit_mode: this.editMode,
       };
 
       try {

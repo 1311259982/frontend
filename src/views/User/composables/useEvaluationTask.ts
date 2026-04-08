@@ -24,17 +24,26 @@ export function useEvaluationTask(settings: Ref<{ depth: number; selectedModelId
         return;
       }
 
+      const usingCards = evalStore.items.length > 0;
       const payload = {
         project_name: evalStore.projectName,
         requirement_title: evalStore.requirementTitle,
         requirement_type: evalStore.requirementType,
-        text_content: evalStore.requirementType === 'text' || evalStore.textContent ? evalStore.textContent : undefined,
+        text_content: !usingCards && (evalStore.requirementType === 'text' || evalStore.textContent) ? evalStore.textContent : undefined,
         document_file_id: evalStore.requirementType === 'document' ? evalStore.uploadedFile?.file_id : undefined,
         standard_ids: standardIds,
         referenced_baseline_id: evalStore.referencedBaselineIds[0] || null,
         only_evaluate_new: evalStore.onlyEvaluateNew,
         instructions: evalStore.instructions || undefined,
         model_id: unref(settings).selectedModelId || modelStore.defaultModelId,
+        edit_mode: evalStore.editMode,
+        items: usingCards ? evalStore.items.map((item: any, idx: number) => ({
+          parent_item_id: item.parent_item_id ?? null,
+          title: item.title,
+          content: item.content ?? '',
+          status: item.status,
+          sort_order: idx,
+        })) : undefined,
       };
 
       const { evaluation_id } = await startEvaluation(payload);

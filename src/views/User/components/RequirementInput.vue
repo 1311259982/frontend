@@ -39,6 +39,8 @@
             </div>
           </div>
           <div class="flex items-center gap-2">
+            <el-button v-if="evalStore.editMode === 'incremental'" size="small" type="warning" plain icon="Unlock" @click="handleUnlockBaseline">解锁并修改基准</el-button>
+            <el-tag v-else size="small" type="warning" effect="dark">已进入全量重塑模式</el-tag>
             <el-button size="small" link type="primary" icon="View" @click="$emit('previewFile', baselineStore.allFiles.find(f => f.id === evalStore.referencedBaselineIds[0]))">查看全文</el-button>
             <el-button size="small" link type="danger" icon="Close" @click="evalStore.clearBaselines()">取消引用</el-button>
           </div>
@@ -78,18 +80,91 @@
 
       <el-card class="border-none shadow-sm bg-gray-50 rounded-2xl overflow-hidden">
         <div v-if="evalStore.requirementType === 'text'" class="p-1">
-          <el-input
-            v-model="evalStore.textContent"
-            type="textarea"
-            :rows="12"
-            :placeholder="inputPlaceholder"
-            resize="none"
-            :disabled="evalStore.onlyReference"
-          />
-          <div class="p-2 text-[10px] text-gray-400 text-right">
-            当前字数: {{ evalStore.textContent.length }}
+          <!-- 卡片流模式 -->
+          <div v-if="evalStore.items.length > 0" class="space-y-4 p-4 bg-gray-50/50">
+            <div 
+              v-for="(item, index) in evalStore.items" 
+              :key="index"
+              class="relative bg-white rounded-xl border p-4 shadow-sm transition-all duration-300"
+              :class="{
+                'border-green-300 bg-green-50/30': item.status === 'new',
+                'border-orange-300 bg-orange-50/30': item.status === 'modified',
+                'border-gray-200 opacity-60': item.status === 'deleted',
+                'border-blue-100': item.status === 'unchanged'
+              }"
+            >
+              <!-- Card Header -->
+              <div class="flex items-center justify-between mb-3 border-b pb-2" :class="{'border-gray-100': item.status === 'unchanged', 'border-green-100': item.status === 'new', 'border-orange-100': item.status === 'modified'}">
+                <div class="flex items-center gap-3">
+                  <el-tag size="small" effect="light"
+                    :type="item.status === 'new' ? 'success' : item.status === 'modified' ? 'warning' : item.status === 'deleted' ? 'info' : 'primary'">
+                    {{ item.status === 'new' ? '新增卡片' : item.status === 'modified' ? '已修改' : item.status === 'deleted' ? '已删除' : '未修改' }}
+                  </el-tag>
+                  <el-input 
+                    v-model="item.title" 
+                    class="font-bold w-64"
+                    :class="{'opacity-50': item.status === 'deleted'}"
+                    size="small"
+                    placeholder="输入卡片标题"
+                    :disabled="item.status === 'deleted' || evalStore.onlyReference"
+                    @input="evalStore.updateItem(index, item.title, item.content)"
+                  />
+                </div>
+                <div v-if="!evalStore.onlyReference">
+                  <el-button 
+                    v-if="item.status === 'deleted'"
+                    size="small" type="success" plain @click="evalStore.toggleDeleteItem(index)"
+                  >
+                    恢复卡片
+                  </el-button>
+                  <el-button 
+                    v-else
+                    size="small" type="danger" plain icon="Delete" @click="evalStore.toggleDeleteItem(index)"
+                  />
+                </div>
+              </div>
+              
+              <!-- Card Content -->
+              <el-input
+                v-model="item.content"
+                type="textarea"
+                :autosize="{ minRows: 2, maxRows: 8 }"
+                placeholder="在此输入或编辑需求细节..."
+                resize="none"
+                :disabled="item.status === 'deleted' || evalStore.onlyReference"
+                @input="evalStore.updateItem(index, item.title, item.content)"
+                class="req-card-input"
+              />
+            </div>
+            
+            <el-button 
+              type="primary" plain class="w-full border-dashed" icon="Plus" 
+              @click="evalStore.addItem('', '')"
+              :disabled="evalStore.onlyReference"
+            >
+              添加新需求卡片
+            </el-button>
+          </div>
+
+          <!-- 旧版长文本模式 (无卡片时备用) -->
+          <div v-else class="relative">
+            <el-input
+              v-model="evalStore.textContent"
+              type="textarea"
+              :rows="12"
+              :placeholder="inputPlaceholder"
+              resize="none"
+              :disabled="evalStore.onlyReference"
+            />
+            <div class="p-3 bg-white border-t flex justify-between items-center text-[11px] text-gray-500 rounded-b-xl">
+              <el-button size="small" type="primary" plain icon="DocumentCopy" @click="evalStore.addItem('默认卡片标题', evalStore.textContent); evalStore.textContent=''">
+                转换为卡片流模式 (推荐)
+              </el-button>
+              <span>当前字数: {{ evalStore.textContent.length }}</span>
+            </div>
           </div>
         </div>
+
         <div v-else class="p-8" :class="{ 'opacity-50 pointer-events-none': evalStore.onlyReference }">
           <el-upload
             v-if="!evalStore.uploadedFile"
@@ -133,9 +208,11 @@
           <div v-if="evalStore.uploadedFile && isEditingParsedText" class="mt-4 p-4 bg-white rounded-xl border border-blue-50 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
             <div class="flex items-center justify-between mb-2 px-1">
               <p class="text-xs font-bold text-gray-500 flex items-center gap-1">
-                <el-icon><Document /></el-icon> 解析文本 (可直接在此修改)
+                <el-icon><Document /></el-icon> 解析文本 (建议将解析后的文本转为卡片流)
               </p>
-              <span class="text-[10px] text-gray-400">当前字数: {{ evalStore.textContent.length }}</span>
+              <el-button size="small" type="primary" plain icon="DocumentCopy" @click="evalStore.requirementType = 'text'; evalStore.addItem('解析导入卡片', evalStore.textContent); evalStore.textContent=''; isEditingParsedText=false">
+                转入卡片流模式
+              </el-button>
             </div>
             <el-input
               v-model="evalStore.textContent"
@@ -201,8 +278,8 @@
 <script setup lang="ts">
 import { ref, computed, watch, reactive } from 'vue';
 import { useEvaluationStore, useBaselineStore, useModelStore } from '@/store';
-import { ElMessage } from 'element-plus';
-import { Plus, Connection, View, Close, Document, Edit, Delete, UploadFilled, QuestionFilled, ChatLineRound } from '@element-plus/icons-vue';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import { Plus, Connection, View, Close, Document, Edit, Delete, UploadFilled, QuestionFilled, ChatLineRound, Unlock, DocumentCopy } from '@element-plus/icons-vue';
 
 const props = defineProps<{ settings: { depth: number; selectedModelId: number | null } }>();
 const emit = defineEmits(['update:settings', 'openBaselineDrawer', 'previewFile']);
@@ -225,10 +302,30 @@ const availableModels = computed(() => {
 
 const inputPlaceholder = computed(() => {
   if (evalStore.referencedBaselineIds.length > 0) {
-    return '您已引用基准需求作为参考，此处请输入本次评估的【新增/差异需求】内容，系统将结合两者进行综合评估...\n\n提示：如果仅想重新评估基准需求，可保持此处为空并直接点击下一步。';
+    if (evalStore.editMode === 'full') {
+      return '全量重塑模式：您可以在此直接修改或覆盖原有的基准需求文档内容...';
+    }
+    return '您已引用基准需求。默认在此输入【本次新增或变化的需求内容】（请勿输入基准中已有且未变更的内容）...';
   }
   return '请输入您需要评估的需求内容，支持单条/多条需求，将作为本次评估的核心对象...';
 });
+
+const handleUnlockBaseline = () => {
+  ElMessageBox.confirm(
+    '将基准内容同步到编辑器后，本次评估将转为“全量覆盖/重塑模式”，您可以整体修改需求。确认继续？',
+    '解锁基准重塑',
+    {
+      confirmButtonText: '确认解锁',
+      cancelButtonText: '取消',
+      type: 'warning',
+    }
+  ).then(() => {
+    evalStore.unlockBaselineToEditor();
+    ElMessage.success('已切换为全量重塑模式，基准内容已载入');
+  }).catch(() => {
+    // cancelled
+  });
+};
 
 const handleReqFileUpload = async (file: any) => {
   try {

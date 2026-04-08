@@ -77,6 +77,14 @@ export const register = (username: string, password: string): Promise<AuthRespon
 // ─────────────────────────────────────────────
 // 类型定义（与后端 API 文档对应）
 // ─────────────────────────────────────────────
+export interface EvaluationItemCreate {
+  parent_item_id?: number | null;
+  title: string;
+  content: string;
+  status: 'new' | 'modified' | 'unchanged' | 'deleted';
+  sort_order: number;
+}
+
 export interface StartEvaluationPayload {
   project_name: string;
   requirement_title: string;
@@ -88,6 +96,8 @@ export interface StartEvaluationPayload {
   only_evaluate_new?: boolean;
   instructions?: string;
   model_id?: number;
+  edit_mode?: string;
+  items?: EvaluationItemCreate[];
 }
 
 export interface EvaluationReport {

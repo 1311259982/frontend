@@ -39,14 +39,19 @@
                       <span class="text-sm font-bold text-gray-800 truncate min-w-0 leading-tight">{{ base.name }}</span>
                       <el-tag size="small" :type="getScoreType(base.score)" class="text-xs font-bold whitespace-nowrap">{{ base.score }}</el-tag>
                     </div>
-                    <el-select v-if="base.versions" v-model="selectedVersions[base.id]" size="small" class="!w-[125px]" @change="handleVersionChange(base, $event)" placeholder="选择版本">
-                      <el-option 
-                        v-for="version in base.versions" 
-                        :key="version.id" 
-                        :label="version.version" 
-                        :value="version.id" 
-                      />
-                    </el-select>
+                    <div class="flex items-center gap-2">
+                      <el-select v-if="base.versions" v-model="selectedVersions[base.id]" size="small" class="!w-[125px]" @change="handleVersionChange(base, $event)" placeholder="选择版本">
+                        <el-option 
+                          v-for="version in base.versions" 
+                          :key="version.id" 
+                          :label="version.version" 
+                          :value="version.id" 
+                        />
+                      </el-select>
+                      <el-tooltip content="查阅此版本基准文档全貌" placement="top">
+                        <el-button size="small" circle icon="Notebook" type="success" plain @click.stop="() => { const v = base.versions.find(ver => ver.id === selectedVersions[base.id]) || base; $router.push({ name: 'BaselineDetail', params: { versionId: v.id }, query: { project: base.name, title: v.title || base.name, version: v.version } }) }" />
+                      </el-tooltip>
+                    </div>
                   </div>
                 </div>
                 <div class="flex flex-col items-center justify-start gap-2 shrink-0 mt-1">
@@ -78,11 +83,7 @@
                 :key="versionItem.id"
                 class="bg-white p-5 rounded-lg shadow-sm border-l-4 border-l-blue-400 transition-all duration-300 group relative"
               >
-                <div class="flex items-start justify-between absolute right-3 top-3">
-                  <el-tooltip content="查阅此版本基准文档全貌" placement="top">
-                    <el-button size="small" circle icon="Notebook" type="success" plain @click.stop="$router.push({ name: 'BaselineDetail', params: { versionId: versionItem.id }, query: { project: base.name, title: versionItem.title || base.name, version: versionItem.version } })" />
-                  </el-tooltip>
-                </div>
+
                 <h4 class="text-sm font-bold text-gray-800 line-clamp-1 mb-2 pr-8">{{ versionItem.title || base.name }} <el-tag size="small" type="info" class="ml-2 !scale-90 origin-left">版本总览</el-tag></h4>
                 <div class="flex items-center justify-between">
                   <span class="text-xs text-gray-500">{{ versionItem.date || versionItem.created_at?.split('T')[0] }}</span>

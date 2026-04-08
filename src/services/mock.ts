@@ -291,6 +291,17 @@ export const getBaselineContent = async (id: number): Promise<{ content: string 
     return { content: baseline?.full_content || '这是模拟的基准需求全文内容...' };
 };
 
+export const getBaselineItems = async (id: number): Promise<any[]> => {
+    await delay(200);
+    return [
+        {
+            id: 1, version_id: 1, parent_item_id: null, origin_version_id: 1,
+            title: 'Mock 标题1', content: 'Mock 内容1',
+            is_new: false, is_deleted: false, sort_order: 0
+        }
+    ];
+};
+
 /**
  * 删除基准需求（及其子版本）
  */
