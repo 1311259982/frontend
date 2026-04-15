@@ -137,18 +137,53 @@ export const startEvaluation = async (
 
     let progress = 0;
     const taskState = { progress, report, timer: null as any };
-
-    // 启动模拟进度定时器
-    taskState.timer = setInterval(() => {
-        taskState.progress += Math.floor(Math.random() * 10) + 5;
-        if (taskState.progress >= 100) {
-            taskState.progress = 100;
-            clearInterval(taskState.timer);
-        }
-    }, 200);
-
     _pendingEvaluations.set(id, taskState);
+
+    taskState.timer = setInterval(() => {
+        progress += Math.floor(Math.random() * 20) + 10;
+        if (progress >= 100) {
+            progress = 100;
+            taskState.progress = progress;
+            clearInterval(taskState.timer);
+        } else {
+            taskState.progress = progress;
+        }
+    }, 500);
+
     return { evaluation_id: id, status: 'processing' };
+};
+
+export const createDraft = async (payload: any): Promise<{ evaluation_id: number; status: string }> => {
+    await delay(100);
+    const id = genId();
+    return { evaluation_id: id, status: 'draft' };
+};
+
+export const syncDraftItems = async (evaluationId: number, items: any[]): Promise<{ message: string }> => {
+    await delay(100);
+    return { message: "synced" };
+};
+
+export const submitDraft = async (evaluationId: number, payload: any): Promise<{ evaluation_id: number; status: string }> => {
+    await delay(200);
+    const report = generateMockReport({ referenced_baseline_id: null } as any);
+    
+    let progress = 0;
+    const taskState = { progress, report, timer: null as any };
+    _pendingEvaluations.set(evaluationId, taskState);
+
+    taskState.timer = setInterval(() => {
+        progress += Math.floor(Math.random() * 20) + 10;
+        if (progress >= 100) {
+            progress = 100;
+            taskState.progress = progress;
+            clearInterval(taskState.timer);
+        } else {
+            taskState.progress = progress;
+        }
+    }, 500);
+
+    return { evaluation_id: evaluationId, status: 'processing' };
 };
 
 /**

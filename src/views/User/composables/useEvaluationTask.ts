@@ -1,6 +1,6 @@
 import { ref, unref, type Ref } from 'vue';
 import { ElMessage } from 'element-plus';
-import { startEvaluation, getEvaluationStatus } from '@/services';
+import { startEvaluation, getEvaluationStatus, syncDraftItems, submitDraft } from '@/services';
 import { useEvaluationStore, useModelStore, useKnowledgeStore } from '@/store';
 
 export function useEvaluationTask(settings: Ref<{ depth: number; selectedModelId: number | null }> | { depth: number; selectedModelId: number | null }) {
@@ -24,31 +24,50 @@ export function useEvaluationTask(settings: Ref<{ depth: number; selectedModelId
         return;
       }
 
-      const usingCards = evalStore.items.length > 0;
-      const payload = {
-        project_name: evalStore.projectName,
-        requirement_title: evalStore.requirementTitle,
-        requirement_type: evalStore.requirementType,
-        text_content: !usingCards && (evalStore.requirementType === 'text' || evalStore.textContent) ? evalStore.textContent : undefined,
-        document_file_id: evalStore.requirementType === 'document' ? evalStore.uploadedFile?.file_id : undefined,
-        standard_ids: standardIds,
-        referenced_baseline_id: evalStore.referencedBaselineIds[0] || null,
-        only_evaluate_new: evalStore.onlyEvaluateNew,
-        instructions: evalStore.instructions || undefined,
-        model_id: unref(settings).selectedModelId || modelStore.defaultModelId,
-        edit_mode: evalStore.editMode,
-        items: usingCards ? evalStore.items.map((item: any, idx: number) => ({
-          parent_item_id: item.parent_item_id ?? null,
-          title: item.title,
-          content: item.content ?? '',
-          status: item.status,
-          sort_order: idx,
-        })) : undefined,
-      };
+      if (evalStore.draftId) {
+        // Sync items explicitly in case of pending debounce
+        if (evalStore.syncTimer) {
+          clearTimeout(evalStore.syncTimer);
+          evalStore.syncTimer = null;
+        }
+        await syncDraftItems(evalStore.draftId, evalStore.items);
 
-      const { evaluation_id } = await startEvaluation(payload);
-      _currentEvaluationId = evaluation_id;
-      pollEvaluationStatus(evaluation_id);
+        const payload = {
+          standard_ids: standardIds,
+          instructions: evalStore.instructions || undefined,
+          model_id: unref(settings).selectedModelId || modelStore.defaultModelId,
+        };
+        const { evaluation_id } = await submitDraft(evalStore.draftId, payload);
+        _currentEvaluationId = evaluation_id;
+        evalStore.draftId = null; // Important: Clear it so onUnmount doesn't destroy the submitted evaluation
+        pollEvaluationStatus(evaluation_id);
+      } else {
+        const usingCards = evalStore.items.length > 0;
+        const payload = {
+          project_name: evalStore.projectName,
+          requirement_title: evalStore.requirementTitle,
+          requirement_type: evalStore.requirementType,
+          text_content: !usingCards && (evalStore.requirementType === 'text' || evalStore.textContent) ? evalStore.textContent : undefined,
+          document_file_id: evalStore.requirementType === 'document' ? evalStore.uploadedFile?.file_id : undefined,
+          standard_ids: standardIds,
+          referenced_baseline_id: evalStore.referencedBaselineIds[0] || null,
+          only_evaluate_new: evalStore.onlyEvaluateNew,
+          instructions: evalStore.instructions || undefined,
+          model_id: unref(settings).selectedModelId || modelStore.defaultModelId,
+          edit_mode: evalStore.editMode,
+          items: usingCards ? evalStore.items.map((item: any, idx: number) => ({
+            parent_item_id: item.parent_item_id ?? null,
+            title: item.title,
+            content: item.content ?? '',
+            status: item.status,
+            sort_order: idx,
+          })) : undefined,
+        };
+
+        const { evaluation_id } = await startEvaluation(payload);
+        _currentEvaluationId = evaluation_id;
+        pollEvaluationStatus(evaluation_id);
+      }
     } catch (e: any) {
       evalStore.isEvaluating = false;
       ElMessage.error(`评估启动失败：${e.message || '未知错误'}`);

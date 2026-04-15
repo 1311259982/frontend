@@ -93,7 +93,7 @@ export function useBaselineActions() {
         await baselineStore.addBaseline({
           name: name || '未命名基准',
           title: requirementTitle || '未命名需求',
-          desc: '由评估报告归档生成的基准需求文档。',
+          desc: requirementTitle || '',
           score: target.total_score || target.score,
           scope: 'private',
           parent_base_id: parentId,
@@ -147,7 +147,7 @@ export function useBaselineActions() {
       baselineStore.addBaseline({
         name: defaultName || '未命名基准',
         title: evalStore.requirementTitle || defaultName || '未命名需求',
-        desc: '由评估报告归档生成的基准需求文档。',
+        desc: evalStore.requirementTitle || '',
         score: target.total_score || target.score,
         scope: 'private',
         parent_base_id: parentId,

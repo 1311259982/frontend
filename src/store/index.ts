@@ -6,7 +6,8 @@ import {
   archiveEvaluation, getStandards, uploadStandardFile,
   createCategory, deleteCategory, deleteStandardFile, seedData,
   updateStandardStatus, uploadRequirementFile,
-  deleteUpload, getBaselineItems
+  deleteUpload, getBaselineItems,
+  createDraft, syncDraftItems
 } from '@/services';
 
 // ─────────────────────────────────────────────
@@ -437,7 +438,7 @@ export const useBaselineStore = defineStore('baseline', {
         const newBaseline = await createBaseline({
           name: file.name || '未命名基准',
           title: file.title || '未命名需求',
-          desc: file.desc || '由评估报告归档生成的基准需求文档。',
+          desc: file.desc || '',
           score: file.score || 0,
           scope: file.scope || 'private',
           parent_base_id: file.parent_base_id || null,
@@ -515,6 +516,8 @@ export const useEvaluationStore = defineStore('evaluation', {
     editMode: 'incremental' as 'incremental' | 'full',
     baselineContentItem: '',
     items: [] as any[], // NEW: 卡片流列表
+    draftId: null as number | null,
+    syncTimer: null as any,
     /**
      * 评估历史记录。
      * 初始为空，通过 fetchHistory() 从 service 层加载。
@@ -551,6 +554,16 @@ export const useEvaluationStore = defineStore('evaluation', {
           }
         });
 
+        // The initial evaluation (V1.0) has parent_base_id = null, so it went to 'independent'.
+        // We link it here by matching project_name and is_archived.
+        independent.forEach(indItem => {
+          if ((indItem.project_name === base.name || indItem.projectName === base.name) && indItem.is_archived) {
+             if (familyHistory.findIndex(h => h.id === indItem.id) === -1) {
+                familyHistory.push(indItem);
+             }
+          }
+        });
+
         familyHistory.sort((a, b) => {
           if (a.id === base.id) return -1;
           if (b.id === base.id) return 1;
@@ -566,7 +579,7 @@ export const useEvaluationStore = defineStore('evaluation', {
         independent
           .filter(i => !i.is_archived && !i.parent_base_id)
           .reduce((groups: Record<string, any[]>, item) => {
-            const projectName = item.projectName || '未命名项目';
+            const projectName = item.project_name || item.projectName || '未命名项目';
             if (!groups[projectName]) groups[projectName] = [];
             groups[projectName].push(item);
             return groups;
@@ -600,6 +613,37 @@ export const useEvaluationStore = defineStore('evaluation', {
       }
     },
 
+    async initDraft() {
+      if (!this.projectName) return;
+      try {
+        const payload = {
+          project_name: this.projectName,
+          requirement_title: this.requirementTitle || undefined,
+          referenced_baseline_id: this.referencedBaselineIds.length > 0 ? this.referencedBaselineIds[0] : null
+        };
+        const res = await createDraft(payload);
+        this.draftId = res.evaluation_id;
+        console.log('[EvaluationStore] initDraft created draftId:', this.draftId);
+      } catch(e) {
+        console.error('[EvaluationStore] Failed to initialize draft:', e);
+      }
+    },
+
+    debouncedSyncItems() {
+      if (!this.draftId) return;
+      if (this.syncTimer) {
+        clearTimeout(this.syncTimer);
+      }
+      this.syncTimer = setTimeout(async () => {
+        try {
+          await syncDraftItems(this.draftId!, this.items);
+          console.log('[EvaluationStore] Synced draft items successfully.');
+        } catch(e) {
+          console.error('[EvaluationStore] Failed to sync draft items:', e);
+        }
+      }, 500);
+    },
+
     setStep(step: number) {
       this.currentStep = step;
     },
@@ -613,6 +657,16 @@ export const useEvaluationStore = defineStore('evaluation', {
         this.editMode = 'incremental';
       } else {
         this.referencedBaselineIds = [id];
+        
+        // 继承基准的项目名（项目归属不变），但不继承标题（让用户为本次评估自定义名称）
+        const baselineStore = useBaselineStore();
+        const baseDoc = baselineStore.allFiles.find(f => f.id === id);
+        if (baseDoc) {
+          this.projectName = baseDoc.name;
+          // requirementTitle 留空，让用户主动填写，避免历史记录中所有版本同名
+          this.requirementTitle = '';
+        }
+
         this.editMode = 'incremental';
         this.textContent = '';
         this.items = []; // Clear current items
@@ -631,6 +685,10 @@ export const useEvaluationStore = defineStore('evaluation', {
       }
       if (this.referencedBaselineIds.length === 0) {
         this.onlyReference = false;
+      }
+      // Since baseline changed, re-init draft
+      if (this.projectName) {
+        this.initDraft();
       }
     },
 
@@ -651,6 +709,7 @@ export const useEvaluationStore = defineStore('evaluation', {
         status: 'new',
         sort_order: this.items.length
       });
+      this.debouncedSyncItems();
     },
 
     updateItem(index: number, title: string, content: string) {
@@ -660,6 +719,7 @@ export const useEvaluationStore = defineStore('evaluation', {
         if (this.items[index].status === 'unchanged') {
           this.items[index].status = 'modified';
         }
+        this.debouncedSyncItems();
       }
     },
 
@@ -675,10 +735,16 @@ export const useEvaluationStore = defineStore('evaluation', {
           // Mark as deleted
           this.items[index].status = 'deleted';
         }
+        this.debouncedSyncItems();
       }
     },
 
     clearBaselines() {
+      // Clean up backend draft if abandoned
+      if (this.draftId) {
+         cancelEvaluation(this.draftId).catch(console.error);
+         this.draftId = null;
+      }
       this.referencedBaselineIds = [];
       this.onlyReference = false;
       this.baselineContentItem = '';
@@ -687,6 +753,9 @@ export const useEvaluationStore = defineStore('evaluation', {
     },
 
     reset() {
+      if (this.draftId) {
+         cancelEvaluation(this.draftId).catch(console.error);
+      }
       this.projectName = '';
       this.requirementTitle = '';
       this.textContent = '';
@@ -700,6 +769,8 @@ export const useEvaluationStore = defineStore('evaluation', {
       this.baselineContentItem = '';
       this.items = [];
       this.editMode = 'incremental';
+      this.draftId = null;
+      if (this.syncTimer) clearTimeout(this.syncTimer);
     },
 
     /**
@@ -747,7 +818,7 @@ export const useEvaluationStore = defineStore('evaluation', {
 
       const newRecord = {
         projectName,
-        title: this.requirementTitle || (this.requirementType === 'document' ? this.uploadedFile?.name : this.textContent.slice(0, 15) + '...'),
+        title: this.requirementTitle || (this.requirementType === 'document' ? this.uploadedFile?.name : (this.textContent ? this.textContent.slice(0, 15) + '...' : projectName)),
         total_score: report.total_score || report.score,
         date: new Date().toISOString().split('T')[0],
         model: report.model_used || 'GPT-4o',

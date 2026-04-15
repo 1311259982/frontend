@@ -16,24 +16,24 @@
       </div>
 
       <div class="space-y-4">
-        <div v-for="(versions, projectName) in groupedBaselines" :key="projectName">
-          <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl cursor-pointer" @click="toggleProjectCollapse(projectName)">
+        <div v-for="group in displayedBaselines" :key="group.projectName">
+          <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl cursor-pointer" @click="toggleProjectCollapse(group.projectName)">
             <div class="flex items-center gap-2">
-              <el-icon :class="{'rotate-180': collapsedProjects[projectName]}" class="transition-transform">
+              <el-icon :class="{'rotate-180': collapsedProjects[group.projectName]}" class="transition-transform">
                 <CaretBottom />
               </el-icon>
-              <h3 class="text-sm font-bold text-gray-800">{{ projectName }}</h3>
-              <span class="text-xs text-gray-400">({{ versions.length }} 个版本)</span>
+              <h3 class="text-sm font-bold text-gray-800">{{ group.projectName || group.name }}</h3>
+              <span class="text-xs text-gray-400">({{ group.versions.length }} 个版本)</span>
             </div>
           </div>
           
           <el-collapse-transition>
-            <div v-if="!collapsedProjects[projectName]" class="pl-4 border-l-2 border-gray-200 mt-1">
+            <div v-if="!collapsedProjects[group.projectName]" class="pl-4 border-l-2 border-gray-200 mt-1">
               <div class="p-3 rounded-xl border border-gray-100">
                 <div class="mb-3">
-                  <el-select v-model="selectedVersions[projectName]" placeholder="选择版本" size="small" class="w-full">
+                  <el-select v-model="selectedVersions[group.projectName]" placeholder="选择版本" size="small" class="w-full">
                     <el-option 
-                      v-for="version in versions" 
+                      v-for="version in group.versions" 
                       :key="version.id" 
                       :label="version.version" 
                       :value="version.id" 
@@ -41,23 +41,23 @@
                   </el-select>
                 </div>
                 
-                <div v-if="getSelectedVersion(projectName)" class="space-y-3">
+                <div v-if="getSelectedVersion(group)" class="space-y-3">
                   <div class="flex justify-between items-center">
                     <div class="text-xs text-gray-500">
-                      归档于: {{ getSelectedVersion(projectName)?.date }}
+                      归档于: {{ getSelectedVersion(group)?.date }}
                     </div>
-                    <el-tag size="small" :type="getSelectedVersion(projectName)?.score > 80 ? 'success' : 'warning'">{{ getSelectedVersion(projectName)?.score }}分</el-tag>
+                    <el-tag size="small" :type="(getSelectedVersion(group)?.score || 0) > 80 ? 'success' : 'warning'">{{ getSelectedVersion(group)?.score || 0 }}分</el-tag>
                   </div>
-
+ 
                   <div class="flex gap-2">
-                    <el-button size="small" icon="View" @click.stop="$emit('previewFile', getSelectedVersion(projectName))">预览</el-button>
+                    <el-button size="small" icon="View" @click.stop="$emit('previewFile', getSelectedVersion(group))">预览</el-button>
                     <el-button 
                       size="small" 
-                      :type="evalStore.referencedBaselineIds.includes(selectedVersions[projectName]) ? 'danger' : 'primary'"
-                      :icon="evalStore.referencedBaselineIds.includes(selectedVersions[projectName]) ? 'Close' : 'Connection'"
-                      @click.stop="$emit('referenceBaseline', selectedVersions[projectName])"
+                      :type="evalStore.referencedBaselineIds.includes(selectedVersions[group.projectName]) ? 'danger' : 'primary'"
+                      :icon="evalStore.referencedBaselineIds.includes(selectedVersions[group.projectName]) ? 'Close' : 'Connection'"
+                      @click.stop="$emit('referenceBaseline', selectedVersions[group.projectName])"
                     >
-                      {{ evalStore.referencedBaselineIds.includes(selectedVersions[projectName]) ? '取消引用' : '引用' }}
+                      {{ evalStore.referencedBaselineIds.includes(selectedVersions[group.projectName]) ? '取消引用' : '引用' }}
                     </el-button>
                   </div>
                 </div>
@@ -97,42 +97,29 @@ const baselineFilter = ref('all');
 const selectedVersions = reactive<Record<string, number>>({});
 const collapsedProjects = ref<Record<string, boolean>>({});
 
-const filteredBaselines = computed(() => {
-  let files = baselineStore.allFiles;
+const displayedBaselines = computed(() => {
+  let tree = baselineStore.baselineTree.map(root => ({
+    projectName: root.name,
+    versions: root.versions,
+    scope: root.scope
+  }));
+  
   if (baselineSearch.value) {
-    files = files.filter(f => f.name.toLowerCase().includes(baselineSearch.value.toLowerCase()));
+    tree = tree.filter(t => t.projectName.toLowerCase().includes(baselineSearch.value.toLowerCase()));
   }
   if (baselineFilter.value !== 'all') {
-    files = files.filter(f => f.scope === baselineFilter.value);
+    tree = tree.filter(t => t.scope === baselineFilter.value);
   }
-  return files;
-});
-
-const groupedBaselines = computed(() => {
-  const files = filteredBaselines.value;
-  const groups: Record<string, any[]> = {};
-  const roots = files.filter(f => !f.parent_base_id);
-  
-  roots.forEach(root => {
-    const versions = files.filter(f => f.parent_base_id === root.id || f.id === root.id)
-      .sort((a, b) => {
-        const vA = parseFloat(a.version.replace(/[^0-9.]/g, ''));
-        const vB = parseFloat(b.version.replace(/[^0-9.]/g, ''));
-        return vB - vA;
-      });
-    groups[root.name] = versions;
-  });
-  return groups;
+  return tree;
 });
 
 const toggleProjectCollapse = (projectName: string) => {
   collapsedProjects.value[projectName] = !collapsedProjects.value[projectName];
 };
 
-const getSelectedVersion = (projectName: string) => {
-  const versionId = selectedVersions[projectName];
+const getSelectedVersion = (group: any) => {
+  const versionId = selectedVersions[group.projectName];
   if (!versionId) return null;
-  const versions = groupedBaselines.value[projectName];
-  return versions?.find((v: any) => v.id === versionId) || null;
+  return group.versions.find((v: any) => v.id === versionId) || null;
 };
 </script>

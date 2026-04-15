@@ -70,10 +70,23 @@ const stepHint = computed(() => {
 const isNextDisabled = computed(() => {
   if (evalStore.currentStep === 1) return knowledgeStore.allSelectedFiles.length === 0;
   if (evalStore.currentStep === 2) {
-    if (!evalStore.requirementTitle) return true;
-    if (evalStore.referencedBaselineIds.length === 0 && !evalStore.projectName) return true;
-    if (evalStore.referencedBaselineIds.length > 0) return false;
-    if (evalStore.requirementType === 'text') return evalStore.textContent.length < 10;
+    if (evalStore.referencedBaselineIds.length > 0) {
+      if (evalStore.requirementType === 'text') {
+        if (evalStore.items.length > 0) {
+          return !evalStore.items.some((item: any) => item.content?.trim().length > 0);
+        }
+      }
+      return false;
+    }
+    
+    if (!evalStore.requirementTitle || !evalStore.projectName) return true;
+    
+    if (evalStore.requirementType === 'text') {
+      if (evalStore.items.length > 0) {
+        return !evalStore.items.some((item: any) => item.content?.trim().length > 0);
+      }
+      return evalStore.textContent.length < 10;
+    }
     return !evalStore.uploadedFile;
   }
   return false;

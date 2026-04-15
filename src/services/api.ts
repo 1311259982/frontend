@@ -100,6 +100,21 @@ export interface StartEvaluationPayload {
   items?: EvaluationItemCreate[];
 }
 
+export interface DraftEvaluationPayload {
+  project_name: string;
+  requirement_title?: string;
+  requirement_type?: 'text' | 'document';
+  referenced_baseline_id?: number | null;
+  text_content?: string;
+  parent_category_title?: string;
+}
+
+export interface SubmitDraftPayload {
+  standard_ids: number[];
+  instructions?: string;
+  model_id?: number;
+}
+
 export interface EvaluationReport {
   id: number;
   total_score: number;
@@ -139,6 +154,22 @@ export interface CreateBaselinePayload {
  */
 export const startEvaluation = (payload: StartEvaluationPayload): Promise<{ evaluation_id: number; status: string }> => {
   return http.post('/api/evaluations', payload);
+};
+
+export const createDraft = (payload: DraftEvaluationPayload): Promise<{ evaluation_id: number; status: string }> => {
+  return http.post('/api/evaluations/draft', payload);
+};
+
+export const syncDraftItems = (evaluationId: number, items: EvaluationItemCreate[]): Promise<{ message: string }> => {
+  return http.put(`/api/evaluations/${evaluationId}/items`, { items });
+};
+
+export const submitDraft = (evaluationId: number, payload: SubmitDraftPayload): Promise<{ evaluation_id: number; status: string }> => {
+  return http.post(`/api/evaluations/${evaluationId}/submit`, payload);
+};
+
+export const deleteEvaluation = (evaluationId: number): Promise<void> => {
+  return http.delete(`/api/evaluations/${evaluationId}`);
 };
 
 /**
