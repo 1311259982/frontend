@@ -1,8 +1,10 @@
+import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { useBaselineStore, useEvaluationStore, useKnowledgeStore } from '@/store';
 import { getDeletePreview } from '@/services';
 
 export function useBaselineActions() {
+  const router = useRouter();
   const baselineStore = useBaselineStore();
   const evalStore = useEvaluationStore();
   const knowledgeStore = useKnowledgeStore();
@@ -90,10 +92,10 @@ export function useBaselineActions() {
       const parentId = evalStore.referencedBaselineIds[0] || target.parent_base_id;
       const requirementTitle = historyItem ? historyItem.title : evalStore.requirementTitle;
       try {
-        await baselineStore.addBaseline({
+        const newBaseline = await baselineStore.addBaseline({
           name: name || '未命名基准',
           title: requirementTitle || '未命名需求',
-          desc: requirementTitle || '',
+          desc: evalStore.versionDesc || requirementTitle || '',
           score: target.total_score || target.score,
           scope: 'private',
           parent_base_id: parentId,
@@ -113,7 +115,15 @@ export function useBaselineActions() {
         evalStore.isHistoryLoaded = false;
         await evalStore.fetchHistory();
 
-        ElMessage.success('已成功归档至基准需求库');
+        ElMessage.success('已成功归档至基准需求库，正在为您跳转至新版本...');
+
+        // 清理备注
+        evalStore.versionDesc = '';
+
+        // 行业标准：跳转回基准详情页查看最新版本
+        if (newBaseline && newBaseline.id) {
+          router.push(`/baseline/${newBaseline.id}`);
+        }
       } catch (e: any) {
         ElMessage.error(`归档失败：${e.message || '未知错误'}`);
       }

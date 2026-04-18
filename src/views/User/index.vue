@@ -113,12 +113,24 @@ const {
 } = useBaselineActions();
 
 // Initialization
-onMounted(() => {
+onMounted(async () => {
   console.log('[User/index.vue] Starting background data synchronization...');
-  modelStore.fetchModels().catch(e => console.error('[User] Model sync error:', e));
-  knowledgeStore.fetchStandards().catch(e => console.error('[User] Standards sync error:', e));
-  baselineStore.fetchBaselines().catch(e => console.error('[User] Baseline sync error:', e));
-  evalStore.fetchHistory().catch(e => console.error('[User] History sync error:', e));
+  
+  // Parallel fetch
+  await Promise.all([
+    modelStore.fetchModels().catch(() => {}),
+    knowledgeStore.fetchStandards().catch(() => {}),
+    baselineStore.fetchBaselines().catch(() => {}),
+    evalStore.fetchHistory().catch(() => {})
+  ]);
+
+  // Handle auto-start from Revision Flow (Navigate to Step 3 for review)
+  if (evalStore.isAutoStart) {
+    console.log('[User] Detected Auto-Start from Revision flow. Navigating to Config Step...');
+    evalStore.isAutoStart = false; // Consumer flag
+    evalStore.setStep(3);
+    // User requested NOT to auto-run evaluation, stay at Step 3 to allow parameter tuning
+  }
 });
 
 // Sync default model settings

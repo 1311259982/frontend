@@ -12,7 +12,7 @@ import axios from 'axios';
 // ─────────────────────────────────────────────
 // Axios 实例配置
 // ─────────────────────────────────────────────
-const http = axios.create({
+export const http = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
   timeout: 60000,
   headers: {
@@ -413,6 +413,20 @@ export interface BaselineItemDetail {
   sort_order: number;
 }
 
+export interface BaselineContextInfo {
+  id: number;
+  version: string;
+  project_id: number;
+  project_name: string;
+  items: BaselineItemDetail[];
+  evaluation_report: any | null; // using any for EvaluationReport loosely
+}
+
+export interface BaselineFullContextResponse {
+  current: BaselineContextInfo;
+  parent: BaselineContextInfo | null;
+}
+
 export interface BaselineItemExport {
   version_id: number;
   version: string;
@@ -426,6 +440,14 @@ export interface BaselineItemExport {
  */
 export const getBaselineItems = (versionId: number): Promise<BaselineItemDetail[]> => {
   return http.get(`/api/baselines/${versionId}/items`);
+};
+
+/**
+ * 获取版本的双侧对比完整上下文（含父版本信息）
+ * GET /api/baselines/{versionId}/full-context
+ */
+export const getBaselineFullContext = (versionId: number): Promise<BaselineFullContextResponse> => {
+  return http.get(`/api/baselines/${versionId}/full-context`);
 };
 
 /**

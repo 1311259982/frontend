@@ -518,6 +518,8 @@ export const useEvaluationStore = defineStore('evaluation', {
     items: [] as any[], // NEW: 卡片流列表
     draftId: null as number | null,
     syncTimer: null as any,
+    versionDesc: '', // 基准修订时传入备注
+    isAutoStart: false, // 是否跳转后自动开始跑分
     /**
      * 评估历史记录。
      * 初始为空，通过 fetchHistory() 从 service 层加载。
