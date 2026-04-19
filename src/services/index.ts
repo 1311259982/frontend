@@ -47,6 +47,7 @@ export const {
     deleteCategory,
     deleteStandardFile,
     updateStandardStatus,
+    updateStandardPriority,
     deleteUpload,
     getBaselineItems,
     createDraft,

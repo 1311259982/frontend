@@ -284,8 +284,10 @@ export const getBaselineContent = (id: number): Promise<{ content: string }> => 
  * 获取评估标准分类及文件列表
  * GET /api/standards
  */
-export const getStandards = (): Promise<any[]> => {
-  return http.get('/api/standards');
+export const getStandards = (standardType?: string): Promise<any[]> => {
+  const params: any = {};
+  if (standardType) params.standard_type = standardType;
+  return http.get('/api/standards', { params });
 };
 
 /**
@@ -304,7 +306,7 @@ export const uploadStandardFile = (categoryId: number, file: File): Promise<any>
  * 创建标准分类
  * POST /api/standards
  */
-export const createCategory = (payload: { name: string; type: string }): Promise<any> => {
+export const createCategory = (payload: { name: string; type: string; standard_type?: string }): Promise<any> => {
   return http.post('/api/standards', payload);
 };
 
@@ -330,6 +332,10 @@ export const deleteStandardFile = (standardId: number): Promise<void> => {
  */
 export const updateStandardStatus = (standardId: number, status: string): Promise<void> => {
   return http.patch(`/api/standards/files/${standardId}/status`, { status });
+};
+
+export const updateStandardPriority = (standardId: number, priority: string): Promise<any> => {
+  return http.patch(`/api/standards/files/${standardId}/priority`, { priority });
 };
 
 /**

@@ -190,6 +190,142 @@
           </div>
         </div>
 
+        <!-- Smell Library Management -->
+        <div v-if="activeMenu === 'knowledge_smells'" class="space-y-8">
+          <!-- Stats Dashboard -->
+          <div class="grid grid-cols-3 gap-4">
+            <el-card class="border-none shadow-sm rounded-2xl">
+              <p class="text-xs text-gray-400 font-bold uppercase mb-1">异味规则总数</p>
+              <p class="text-2xl font-black text-orange-600">{{ smellStore.categories.reduce((acc: number, c: any) => acc + c.files.length, 0) }}</p>
+            </el-card>
+            <el-card class="border-none shadow-sm rounded-2xl">
+              <p class="text-xs text-gray-400 font-bold uppercase mb-1">已启用规则</p>
+              <p class="text-2xl font-black text-green-600">{{ smellStore.categories.reduce((acc: number, c: any) => acc + c.files.filter((f: any) => f.status === 'enabled').length, 0) }}</p>
+            </el-card>
+            <el-card class="border-none shadow-sm rounded-2xl">
+              <p class="text-xs text-gray-400 font-bold uppercase mb-1">异味分类数</p>
+              <p class="text-2xl font-black text-gray-800">{{ smellStore.categories.length }}</p>
+            </el-card>
+          </div>
+
+          <!-- Default Smell Categories -->
+          <section>
+            <h3 class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <el-icon><Lock /></el-icon> 系统默认异味分组
+            </h3>
+            <div class="flex gap-4 overflow-x-auto pb-2">
+              <el-card 
+                v-for="cat in smellStore.defaultCategories" 
+                :key="cat.id"
+                class="min-w-[220px] border-none shadow-sm rounded-xl cursor-pointer hover:shadow-md transition-all relative group"
+                :class="{'ring-2 ring-orange-500': selectedSmellCategory === cat.id}"
+                @click="selectedSmellCategory = cat.id"
+              >
+                <div class="flex justify-between items-center">
+                  <span class="font-bold text-gray-700">{{ cat.name }}</span>
+                  <el-button size="small" link type="danger" icon="Delete" @click.stop="handleRemoveSmellCategory(cat.id)"></el-button>
+                </div>
+                <p class="text-xs text-gray-400 mt-1">
+                  {{ cat.files.length }} 条规则 | 
+                  <span class="text-red-400">{{ cat.files.filter((f: any) => f.priority === 'high').length }}高</span>
+                  <span class="text-yellow-400">{{ cat.files.filter((f: any) => f.priority === 'medium').length }}中</span>
+                  <span class="text-green-400">{{ cat.files.filter((f: any) => f.priority === 'low').length }}低</span>
+                </p>
+              </el-card>
+              <el-button class="min-w-[120px] rounded-xl border-dashed" icon="Plus" @click="openAddCategory('default')">添加默认分类</el-button>
+            </div>
+          </section>
+
+          <!-- User Defined Smell Categories -->
+          <section>
+            <h3 class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <el-icon><User /></el-icon> 用户自定义异味分组
+            </h3>
+            <div class="flex gap-4 overflow-x-auto pb-2">
+              <el-card 
+                v-for="cat in smellStore.userCategories" 
+                :key="cat.id"
+                class="min-w-[220px] border-none shadow-sm rounded-xl cursor-pointer hover:shadow-md transition-all"
+                :class="{'ring-2 ring-orange-500': selectedSmellCategory === cat.id}"
+                @click="selectedSmellCategory = cat.id"
+              >
+                <div class="flex justify-between items-center">
+                  <span class="font-bold text-gray-700">{{ cat.name }}</span>
+                  <el-button size="small" link type="danger" icon="Delete" @click.stop="handleRemoveSmellCategory(cat.id)"></el-button>
+                </div>
+                <p class="text-xs text-gray-400 mt-1">
+                  {{ cat.files.length }} 条规则 | 
+                  <span class="text-red-400">{{ cat.files.filter((f: any) => f.priority === 'high').length }}高</span>
+                  <span class="text-yellow-400">{{ cat.files.filter((f: any) => f.priority === 'medium').length }}中</span>
+                  <span class="text-green-400">{{ cat.files.filter((f: any) => f.priority === 'low').length }}低</span>
+                </p>
+              </el-card>
+              <el-button class="min-w-[120px] rounded-xl border-dashed" icon="Plus" @click="openAddCategory('user')">添加用户分类</el-button>
+            </div>
+          </section>
+
+          <!-- Smell Rules File List -->
+          <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div class="p-4 border-b border-gray-100 flex justify-between items-center">
+              <h3 class="font-bold text-gray-700">异味规则列表 - {{ currentSmellCategoryName }}</h3>
+              <el-upload
+                action="#"
+                :auto-upload="false"
+                :show-file-list="false"
+                @change="handleSmellFileUpload"
+              >
+                <el-button type="warning" size="small" icon="Upload">上传异味规则</el-button>
+              </el-upload>
+            </div>
+            <el-table :data="currentSmellCategoryFiles" style="width: 100%" class="custom-table">
+              <el-table-column label="异味规则名称" min-width="200">
+                <template #default="{ row }">
+                  <div class="flex items-center gap-3">
+                    <el-icon size="20" class="text-orange-500"><Warning /></el-icon>
+                    <span class="font-medium text-gray-700">{{ row.name }}</span>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column label="状态" width="100">
+                <template #default="{ row }">
+                  <el-switch v-model="row.enabled" active-color="#f97316" @change="toggleSmellFileStatus(row)" />
+                </template>
+              </el-table-column>
+              <el-table-column label="优先级" width="160">
+                <template #default="{ row }">
+                  <el-select 
+                    v-model="row.priority" 
+                    size="small" 
+                    @change="handlePriorityChange(row)"
+                  >
+                    <el-option label="高 (严重)" value="high">
+                      <span class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-red-500 inline-block"></span> 高 (严重)
+                      </span>
+                    </el-option>
+                    <el-option label="中 (一般)" value="medium">
+                      <span class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-yellow-500 inline-block"></span> 中 (一般)
+                      </span>
+                    </el-option>
+                    <el-option label="低 (轻微)" value="low">
+                      <span class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span> 低 (轻微)
+                      </span>
+                    </el-option>
+                  </el-select>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="150" align="right">
+                <template #default="{ row }">
+                  <el-button size="small" text type="primary">预览</el-button>
+                  <el-button size="small" text type="danger" @click="removeSmellFile(row)">删除</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </div>
+
         <!-- Baseline Requirements Management -->
         <div v-if="activeMenu === 'knowledge_baselines'" class="space-y-8">
           <!-- Stats Dashboard -->
@@ -378,12 +514,12 @@
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { useAuthStore, useModelStore, useKnowledgeStore, useBaselineStore } from '@/store';
+import { useAuthStore, useModelStore, useKnowledgeStore, useBaselineStore, useSmellStore } from '@/store';
 import { 
   Setting, Cpu, Files, ChatDotRound, Memo, 
   SwitchButton, Plus, Edit, Delete, Document,
   Lock, User, Upload, ArrowDown, Collection,
-  DocumentChecked, Connection
+  DocumentChecked, Connection, Warning
 } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 
@@ -392,6 +528,7 @@ const authStore = useAuthStore();
 const modelStore = useModelStore();
 const knowledgeStore = useKnowledgeStore();
 const baselineStore = useBaselineStore();
+const smellStore = useSmellStore();
 
 const activeMenu = ref('models');
 const showAddDialog = ref(false);
@@ -401,6 +538,7 @@ const newCategoryName = ref('');
 const newCategoryType = ref<'default' | 'user'>('default');
 const selectedAdminCategory = ref(knowledgeStore.categories[0]?.id);
 const selectedBaselineCategory = ref(baselineStore.categories[0]?.id);
+const selectedSmellCategory = ref(smellStore.categories[0]?.id);
 
 const editingModel = reactive({
   id: 0,
@@ -415,7 +553,8 @@ onMounted(async () => {
   await Promise.all([
     modelStore.fetchModels(),
     baselineStore.fetchBaselines(),
-    knowledgeStore.fetchStandards()
+    knowledgeStore.fetchStandards(),
+    smellStore.fetchSmells(),
   ]);
 });
 
@@ -437,6 +576,7 @@ const menuItems = reactive([
     expanded: true,
     subItems: [
       { id: 'knowledge_standards', name: '标准规则库' },
+      { id: 'knowledge_smells', name: '异味需求库' },
       { id: 'knowledge_baselines', name: '基准需求库' },
     ]
   },
@@ -444,6 +584,7 @@ const menuItems = reactive([
 
 const currentMenuName = computed(() => {
   if (activeMenu.value === 'knowledge_standards') return '标准规则库';
+  if (activeMenu.value === 'knowledge_smells') return '异味需求库';
   if (activeMenu.value === 'knowledge_baselines') return '基准需求库';
   return menuItems.find(i => i.id === activeMenu.value)?.name || '';
 });
@@ -464,6 +605,15 @@ const currentBaselineCategoryName = computed(() => {
 const currentBaselineFiles = computed(() => {
   const cat = baselineStore.categories.find(c => c.id === selectedBaselineCategory.value);
   return cat ? cat.files : [];
+});
+
+const currentSmellCategoryName = computed(() => {
+  return smellStore.categories.find(c => c.id === selectedSmellCategory.value)?.name || '未选择';
+});
+
+const currentSmellCategoryFiles = computed(() => {
+  const cat = smellStore.categories.find(c => c.id === selectedSmellCategory.value);
+  return cat ? cat.files.map(f => ({ ...f, enabled: f.status === 'enabled', priority: f.priority || 'medium' })) : [];
 });
 
 const baselineStats = computed(() => [
@@ -517,7 +667,11 @@ const closeAddCategory = () => {
 const confirmAddCategory = async () => {
   if (!newCategoryName.value) return;
   try {
-    await knowledgeStore.addCategory(newCategoryName.value, newCategoryType.value);
+    if (activeMenu.value === 'knowledge_smells') {
+      await smellStore.addCategory(newCategoryName.value, newCategoryType.value);
+    } else {
+      await knowledgeStore.addCategory(newCategoryName.value, newCategoryType.value);
+    }
     closeAddCategory();
     ElMessage.success('分类添加成功');
   } catch (e: any) {
@@ -575,6 +729,71 @@ const removeFile = (file: any) => {
     try {
       await knowledgeStore.removeFile(selectedAdminCategory.value, file.id);
       ElMessage.success('文件已删除');
+    } catch (e: any) {
+      ElMessage.error(`删除失败: ${e.message || '未知错误'}`);
+    }
+  }).catch(() => {});
+};
+
+const handleSmellFileUpload = async (file: any) => {
+  if (!selectedSmellCategory.value) {
+    ElMessage.warning('请先选择一个异味分类');
+    return;
+  }
+  try {
+    await smellStore.uploadSmellFile(selectedSmellCategory.value, file.raw);
+    ElMessage.success(`已上传异味规则 ${file.name}`);
+  } catch (e: any) {
+    ElMessage.error(`上传失败: ${e.message || '未知错误'}`);
+  }
+};
+
+const toggleSmellFileStatus = async (file: any) => {
+  const newStatus = file.enabled ? 'enabled' : 'disabled';
+  try {
+    await smellStore.updateFileStatus(selectedSmellCategory.value, file.id, newStatus);
+    ElMessage.success(`规则 "${file.name}" 状态已更新为: ${newStatus === 'enabled' ? '开启' : '关闭'}`);
+  } catch (e: any) {
+    file.enabled = !file.enabled;
+    ElMessage.error(`状态更新失败: ${e.message || '未知错误'}`);
+  }
+};
+
+const handlePriorityChange = async (file: any) => {
+  try {
+    await smellStore.updateFilePriority(selectedSmellCategory.value, file.id, file.priority);
+    const label = file.priority === 'high' ? '高' : file.priority === 'medium' ? '中' : '低';
+    ElMessage.success(`规则 "${file.name}" 优先级已更新为: ${label}`);
+  } catch (e: any) {
+    ElMessage.error(`优先级更新失败: ${e.message || '未知错误'}`);
+  }
+};
+
+const removeSmellFile = (file: any) => {
+  ElMessageBox.confirm(`确定要删除异味规则 "${file.name}" 吗？`, '提示', {
+    type: 'warning'
+  }).then(async () => {
+    try {
+      await smellStore.removeFile(selectedSmellCategory.value, file.id);
+      ElMessage.success('规则已删除');
+    } catch (e: any) {
+      ElMessage.error(`删除失败: ${e.message || '未知错误'}`);
+    }
+  }).catch(() => {});
+};
+
+const handleRemoveSmellCategory = (id: number) => {
+  ElMessageBox.confirm('确定要删除此分类及其所有异味规则吗？', '警告', {
+    type: 'warning',
+    confirmButtonText: '确定删除',
+    cancelButtonText: '取消'
+  }).then(async () => {
+    try {
+      await smellStore.removeCategory(id);
+      if (selectedSmellCategory.value === id) {
+        selectedSmellCategory.value = smellStore.categories[0]?.id;
+      }
+      ElMessage.success('分类已删除');
     } catch (e: any) {
       ElMessage.error(`删除失败: ${e.message || '未知错误'}`);
     }

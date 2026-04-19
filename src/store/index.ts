@@ -5,7 +5,7 @@ import {
   updateEvaluation, cancelEvaluation,
   archiveEvaluation, getStandards, uploadStandardFile,
   createCategory, deleteCategory, deleteStandardFile, seedData,
-  updateStandardStatus, uploadRequirementFile,
+  updateStandardStatus, updateStandardPriority, uploadRequirementFile,
   deleteUpload, getBaselineItems,
   createDraft, syncDraftItems
 } from '@/services';
@@ -493,6 +493,112 @@ export const useBaselineStore = defineStore('baseline', {
       }
     }
   }
+});
+
+// ─────────────────────────────────────────────
+// Smell Store
+// ─────────────────────────────────────────────
+export const useSmellStore = defineStore('smell', {
+  state: () => ({
+    categories: [] as any[],
+    isLoaded: false,
+  }),
+  getters: {
+    defaultCategories(state) {
+      return state.categories.filter(c => c.type === 'default');
+    },
+    userCategories(state) {
+      return state.categories.filter(c => c.type === 'user');
+    },
+  },
+  actions: {
+    async fetchSmells() {
+      if (this.isLoaded) return;
+      try {
+        const smells = await getStandards('smell');
+        if (smells && smells.length > 0) {
+          this.categories = smells;
+        }
+        this.isLoaded = true;
+      } catch (e) {
+        console.error('[SmellStore] fetchSmells failed:', e);
+      }
+    },
+    async addCategory(name: string, type: 'default' | 'user' = 'default') {
+      try {
+        const res = await createCategory({ name, type, standard_type: 'smell' });
+        this.categories.push({
+          id: res.id,
+          name: res.name,
+          type: res.type,
+          standard_type: 'smell',
+          files: []
+        });
+        return res;
+      } catch (e) {
+        console.error('[SmellStore] addCategory failed:', e);
+        throw e;
+      }
+    },
+    async removeCategory(id: number) {
+      try {
+        await deleteCategory(id);
+        this.categories = this.categories.filter(c => c.id !== id);
+      } catch (e) {
+        console.error('[SmellStore] removeCategory failed:', e);
+        throw e;
+      }
+    },
+    async uploadSmellFile(categoryId: number, file: File) {
+      try {
+        const res = await uploadStandardFile(categoryId, file);
+        const cat = this.categories.find(c => c.id === categoryId);
+        if (cat) {
+          cat.files.push({ id: res.file_id, name: res.name, status: 'enabled', priority: res.priority || 'medium' });
+        }
+        return res;
+      } catch (e) {
+        console.error('[SmellStore] uploadSmellFile failed:', e);
+        throw e;
+      }
+    },
+    async removeFile(categoryId: number, fileId: number) {
+      try {
+        await deleteStandardFile(fileId);
+        const cat = this.categories.find(c => c.id === categoryId);
+        if (cat) cat.files = cat.files.filter(f => f.id !== fileId);
+      } catch (e) {
+        console.error('[SmellStore] removeFile failed:', e);
+        throw e;
+      }
+    },
+    async updateFileStatus(categoryId: number, fileId: number, status: string) {
+      try {
+        await updateStandardStatus(fileId, status);
+        const cat = this.categories.find(c => c.id === categoryId);
+        if (cat) {
+          const file = cat.files.find(f => f.id === fileId);
+          if (file) file.status = status;
+        }
+      } catch (e) {
+        console.error('[SmellStore] updateFileStatus failed:', e);
+        throw e;
+      }
+    },
+    async updateFilePriority(categoryId: number, fileId: number, priority: string) {
+      try {
+        await updateStandardPriority(fileId, priority);
+        const cat = this.categories.find(c => c.id === categoryId);
+        if (cat) {
+          const file = cat.files.find(f => f.id === fileId);
+          if (file) file.priority = priority;
+        }
+      } catch (e) {
+        console.error('[SmellStore] updateFilePriority failed:', e);
+        throw e;
+      }
+    },
+  },
 });
 
 // ─────────────────────────────────────────────
