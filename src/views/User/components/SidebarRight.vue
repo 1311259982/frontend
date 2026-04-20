@@ -167,7 +167,8 @@ import { ref, reactive, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useEvaluationStore, useBaselineStore } from '@/store';
 import { Timer, Expand, Search, Filter, Connection, Plus, Delete, Fold, Notebook, View, DataBoard } from '@element-plus/icons-vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import { deleteEvaluation } from '@/services';
 
 defineProps<{ collapsed: boolean, width: number }>();
 
@@ -281,13 +282,35 @@ const handleBaselineReference = (versionItem: any) => {
   ElMessage.success(`已引用基准版本: ${versionItem.version || versionItem.name}`);
 };
 
-const deleteBaselineEx = (base: any) => {
+const deleteBaselineEx = async (base: any) => {
   const versions = getAvailableVersions(base);
   const vInfo = versions.find(v => v.version === selectedVersions[base.id]);
   if (vInfo && vInfo.baseId) {
      deleteBaseline(base, vInfo.baseId);
+  } else if (vInfo && !vInfo.isArchived) {
+     const historyItem = base.history?.find((h: any) => h.version === vInfo.version && !h.is_archived);
+     if (historyItem && historyItem.id) {
+       try {
+         await ElMessageBox.confirm(
+           `确定删除 <b>${base.name}</b> 的草稿版本 <b>${vInfo.version}</b> 吗？\n\n此操作不可撤销。`,
+           '删除草稿',
+           { type: 'warning', dangerouslyUseHTMLString: true, confirmButtonText: '确定删除', cancelButtonText: '取消' }
+         );
+         await deleteEvaluation(historyItem.id);
+         evalStore.isHistoryLoaded = false;
+         await evalStore.fetchHistory();
+         baselineStore.isLoaded = false;
+         await baselineStore.fetchBaselines();
+         ElMessage.success(`草稿版本 ${vInfo.version} 已删除`);
+       } catch (e: any) {
+         if (e === 'cancel' || e?.action === 'cancel') return;
+         ElMessage.error(`删除失败：${e?.message || '请检查网络或联系管理员'}`);
+       }
+     } else {
+       ElMessage.warning('未找到对应的评估草稿记录');
+     }
   } else {
-     ElMessage.info('草稿版本无法直接删除，可从独立项目中删除该评估草稿。');
+     ElMessage.info('该版本已归档但未找到对应的基准记录，请刷新页面后重试。');
   }
 };
 

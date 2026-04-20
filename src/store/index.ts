@@ -483,10 +483,12 @@ export const useBaselineStore = defineStore('baseline', {
     async removeBaseline(versionId: number) {
       try {
         await deleteBaseline(versionId);
-        // 强制重新拉取，而不是局部过滤（防止级联删除后幽灵节点残留）
         this.isLoaded = false;
         this.categories.forEach(cat => { cat.files = []; });
         await this.fetchBaselines();
+        const evalStore = useEvaluationStore();
+        evalStore.isHistoryLoaded = false;
+        await evalStore.fetchHistory();
       } catch (e) {
         console.error('[BaselineStore] removeBaseline failed:', e);
         throw e;
