@@ -626,13 +626,9 @@ export const useEvaluationStore = defineStore('evaluation', {
     items: [] as any[], // NEW: 卡片流列表
     draftId: null as number | null,
     syncTimer: null as any,
-    versionDesc: '', // 基准修订时传入备注
-    isAutoStart: false, // 是否跳转后自动开始跑分
-    /**
-     * 评估历史记录。
-     * 初始为空，通过 fetchHistory() 从 service 层加载。
-     * 在 MOCK 模式下返回 SEED_EVALUATIONS；在真实模式下调用 GET /api/evaluations。
-     */
+    versionDesc: '',
+    isAutoStart: false,
+    activeEvaluationId: null as number | null,
     history: [] as any[],
     isHistoryLoaded: false,
   }),
@@ -880,6 +876,7 @@ export const useEvaluationStore = defineStore('evaluation', {
       this.items = [];
       this.editMode = 'incremental';
       this.draftId = null;
+      this.activeEvaluationId = null;
       if (this.syncTimer) clearTimeout(this.syncTimer);
     },
 

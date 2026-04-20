@@ -39,7 +39,8 @@ export function useEvaluationTask(settings: Ref<{ depth: number; selectedModelId
         };
         const { evaluation_id } = await submitDraft(evalStore.draftId, payload);
         _currentEvaluationId = evaluation_id;
-        evalStore.draftId = null; // Important: Clear it so onUnmount doesn't destroy the submitted evaluation
+        evalStore.activeEvaluationId = evaluation_id;
+        evalStore.draftId = null;
         pollEvaluationStatus(evaluation_id);
       } else {
         const usingCards = evalStore.items.length > 0;
@@ -66,6 +67,7 @@ export function useEvaluationTask(settings: Ref<{ depth: number; selectedModelId
 
         const { evaluation_id } = await startEvaluation(payload);
         _currentEvaluationId = evaluation_id;
+        evalStore.activeEvaluationId = evaluation_id;
         pollEvaluationStatus(evaluation_id);
       }
     } catch (e: any) {
@@ -99,6 +101,7 @@ export function useEvaluationTask(settings: Ref<{ depth: number; selectedModelId
       await evalStore.discardEvaluation(_currentEvaluationId).catch(() => {});
       _currentEvaluationId = null;
     }
+    evalStore.activeEvaluationId = null;
     evalStore.isEvaluating = false;
     evalStore.evaluationProgress = 0;
     ElMessage.info('评估已取消并清理物理文件');
@@ -106,6 +109,7 @@ export function useEvaluationTask(settings: Ref<{ depth: number; selectedModelId
 
   const finishEvaluation = async (report: any) => {
     evalStore.isEvaluating = false;
+    evalStore.activeEvaluationId = null;
     evalStore.currentReport = report;
     await evalStore.addHistory(report);
     evalStore.setStep(4);
@@ -140,9 +144,16 @@ export function useEvaluationTask(settings: Ref<{ depth: number; selectedModelId
     _currentEvaluationId = null;
   };
 
+  const resumeEvaluation = (id: number) => {
+    _currentEvaluationId = id;
+    evalStore.isEvaluating = true;
+    pollEvaluationStatus(id);
+  };
+
   return {
     handleStartEvaluation,
     cancelEvaluation,
-    handleRestartEvaluation
+    handleRestartEvaluation,
+    resumeEvaluation
   };
 }

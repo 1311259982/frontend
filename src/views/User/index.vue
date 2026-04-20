@@ -105,7 +105,7 @@ const {
 } = useSidebarLayout();
 
 const { 
-  handleStartEvaluation, cancelEvaluation, handleRestartEvaluation 
+  handleStartEvaluation, cancelEvaluation, handleRestartEvaluation, resumeEvaluation
 } = useEvaluationTask(settings);
 
 const { 
@@ -116,7 +116,6 @@ const {
 onMounted(async () => {
   console.log('[User/index.vue] Starting background data synchronization...');
   
-  // Parallel fetch
   await Promise.all([
     modelStore.fetchModels().catch(() => {}),
     knowledgeStore.fetchStandards().catch(() => {}),
@@ -124,12 +123,47 @@ onMounted(async () => {
     evalStore.fetchHistory().catch(() => {})
   ]);
 
-  // Handle auto-start from Revision Flow (Navigate to Step 3 for review)
   if (evalStore.isAutoStart) {
     console.log('[User] Detected Auto-Start from Revision flow. Navigating to Config Step...');
-    evalStore.isAutoStart = false; // Consumer flag
+    evalStore.isAutoStart = false;
     evalStore.setStep(3);
-    // User requested NOT to auto-run evaluation, stay at Step 3 to allow parameter tuning
+    return;
+  }
+
+  if (evalStore.isEvaluating && evalStore.activeEvaluationId) {
+    console.log('[User] Resuming in-progress evaluation:', evalStore.activeEvaluationId);
+    resumeEvaluation(evalStore.activeEvaluationId);
+    return;
+  }
+
+  if (evalStore.isEvaluating && !evalStore.activeEvaluationId) {
+    evalStore.isEvaluating = false;
+    evalStore.evaluationProgress = 0;
+  }
+
+  if (!evalStore.currentReport && evalStore.history.length > 0) {
+    const unarchivedWithResults = evalStore.history.filter(
+      (item: any) => !item.is_archived && (item.issues?.length > 0 || item.suggestions)
+    );
+    if (unarchivedWithResults.length > 0) {
+      unarchivedWithResults.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      const latest = unarchivedWithResults[0];
+      evalStore.currentReport = {
+        total_score: latest.total_score || latest.score,
+        task_type: latest.task_type || 'full',
+        parent_base_id: latest.parent_base_id || null,
+        issues: latest.issues || [],
+        suggestions: latest.suggestions || '',
+        is_archived: latest.is_archived,
+        id: latest.id,
+      };
+      if (latest.parent_base_id) {
+        evalStore.referencedBaselineIds = [latest.parent_base_id];
+      }
+      evalStore.projectName = latest.projectName || latest.project_name || '';
+      evalStore.setStep(4);
+      console.log('[User] Restored evaluation state from history:', latest.id);
+    }
   }
 });
 
@@ -154,30 +188,31 @@ const handleRestart = () => {
 
 const loadHistory = async (history: any) => {
   ElMessage.info(`正在加载历史记录: ${history.title}`);
-  if (history.issues && history.suggestions) {
+  const restoreReport = (data: any) => {
     evalStore.currentReport = {
-      total_score: history.total_score || history.score,
-      task_type: history.task_type || 'full',
-      parent_base_id: history.parent_base_id || null,
-      issues: history.issues,
-      suggestions: history.suggestions,
-      is_archived: history.is_archived,
+      total_score: data.total_score || data.score,
+      task_type: data.task_type || 'full',
+      parent_base_id: data.parent_base_id || null,
+      issues: data.issues || [],
+      suggestions: data.suggestions || '',
+      is_archived: data.is_archived,
+      id: data.id,
     };
+    if (data.parent_base_id) {
+      evalStore.referencedBaselineIds = [data.parent_base_id];
+    }
+    evalStore.projectName = data.projectName || data.project_name || '';
     evalStore.setStep(4);
+  };
+
+  if (history.issues && history.suggestions) {
+    restoreReport(history);
     return;
   }
   try {
     const { getEvaluationDetail } = await import('@/services');
     const detail = await getEvaluationDetail(history.id);
-    evalStore.currentReport = {
-      total_score: detail.total_score || detail.score,
-      task_type: detail.task_type || 'full',
-      parent_base_id: detail.parent_base_id || null,
-      issues: detail.issues || [],
-      suggestions: detail.suggestions || '',
-      is_archived: detail.is_archived,
-    };
-    evalStore.setStep(4);
+    restoreReport({ ...detail, id: history.id });
   } catch (e: any) {
     ElMessage.error(`加载历史记录失败：${e.message}`);
   }

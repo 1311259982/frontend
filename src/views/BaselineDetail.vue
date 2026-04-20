@@ -1,132 +1,180 @@
 <template>
-  <div class="h-screen flex flex-col bg-gray-50 overflow-hidden text-sm">
-    <!-- Top Navigation -->
-    <header class="h-16 bg-white border-b border-gray-200 shadow-sm flex-shrink-0 flex items-center justify-between px-6 z-10">
+  <div class="h-screen flex flex-col bg-slate-50 overflow-hidden text-sm">
+    <header class="h-16 bg-white/90 backdrop-blur-md border-b border-gray-100 shadow-sm flex-shrink-0 flex items-center justify-between px-6 z-10">
       <div class="flex items-center gap-4">
-        <el-button icon="Back" link @click="goBack" class="text-gray-500 hover:text-blue-600">返回</el-button>
+        <el-button icon="Back" link @click="goBack" class="!text-gray-400 hover:!text-blue-600 !text-base">
+          <span class="ml-1 text-sm">返回</span>
+        </el-button>
         <div class="w-px h-6 bg-gray-200"></div>
         <div class="flex items-center gap-3">
-          <div class="bg-gradient-to-br from-blue-600 to-indigo-600 p-2 rounded-lg text-white shadow-md">
-            <el-icon size="16"><Notebook /></el-icon>
+          <div class="bg-gradient-to-br from-blue-500 to-indigo-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-200/50">
+            <el-icon size="18"><Notebook /></el-icon>
           </div>
           <div v-if="currentContext">
-            <h1 class="text-base font-black text-gray-800 leading-tight">{{ currentContext.project_name }}</h1>
-            <p class="text-xs text-gray-400">
-              当前版本: {{ currentContext.version }} · 
-              <span v-if="isDirty" class="text-amber-500 font-bold">草稿（已修改）</span>
-              <span v-else>只读/净态</span>
-            </p>
+            <h1 class="text-base font-black text-gray-800 leading-tight tracking-tight">{{ currentContext.project_name }}</h1>
+            <div class="flex items-center gap-2 mt-0.5">
+              <el-tag size="small" effect="plain" type="primary" class="!text-[10px] !px-1.5 !py-0">{{ currentContext.version }}</el-tag>
+              <span class="text-[11px] text-gray-400">·</span>
+              <span v-if="isDirty" class="text-[11px] text-amber-500 font-bold flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+                草稿（已修改）
+              </span>
+              <span v-else class="text-[11px] text-gray-400">只读</span>
+            </div>
+          </div>
+          <div v-else class="flex items-center gap-2">
+            <el-icon class="animate-spin text-blue-500"><Loading /></el-icon>
+            <span class="text-gray-400 text-xs">加载中...</span>
           </div>
         </div>
       </div>
       <div class="flex items-center gap-3">
-        <el-tag v-if="isDirty" type="warning" effect="dark" class="animate-pulse">检测到本地变动</el-tag>
-        <el-button plain icon="FullScreen" @click="toggleRightPane">
+        <transition name="fade">
+          <el-tag v-if="isDirty" type="warning" effect="dark" size="small" class="animate-pulse">
+            <el-icon class="mr-1"><Warning /></el-icon>检测到本地变动
+          </el-tag>
+        </transition>
+        <el-button plain size="small" @click="toggleRightPane" :icon="rightPaneOpen ? 'Hide' : 'View'">
           {{ rightPaneOpen ? '隐藏当前报告' : '展开当前报告' }}
         </el-button>
       </div>
     </header>
 
-    <!-- Main Content Area -->
     <div class="flex-1 flex overflow-hidden">
-      
-      <!-- Left Pane: Parent View -->
-      <aside class="w-1/3 min-w-[350px] border-r bg-gray-50 flex flex-col z-0">
-        <div class="h-12 border-b bg-white flex items-center justify-between px-4 sticky top-0 flex-shrink-0">
-          <h2 class="font-bold text-gray-700 flex items-center gap-2">
-            <el-icon><CopyDocument /></el-icon> 
-            父版本参考 
-            <el-tag size="small" type="info" effect="plain" v-if="parentContext">{{ parentContext.version }}</el-tag>
+      <aside class="w-1/3 min-w-[350px] border-r border-gray-100 bg-gradient-to-b from-slate-50 to-gray-50 flex flex-col z-0">
+        <div class="h-12 border-b border-gray-100 bg-white/80 backdrop-blur-sm flex items-center justify-between px-4 sticky top-0 flex-shrink-0">
+          <h2 class="font-bold text-gray-700 flex items-center gap-2 text-[13px]">
+            <div class="w-6 h-6 bg-violet-50 rounded-lg flex items-center justify-center">
+              <el-icon class="text-violet-500" size="14"><CopyDocument /></el-icon>
+            </div>
+            父版本参考
+            <el-tag size="small" type="info" effect="plain" v-if="parentContext" class="!text-[10px]">{{ parentContext.version }}</el-tag>
           </h2>
-          <el-radio-group v-model="leftPaneTab" size="small" v-if="parentContext">
+          <el-radio-group v-model="leftPaneTab" size="small" v-if="parentContext" class="!scale-90">
             <el-radio-button value="items">需求</el-radio-button>
             <el-radio-button value="report">报告</el-radio-button>
           </el-radio-group>
         </div>
-        
-        <div class="flex-1 overflow-y-auto" v-if="!parentContext">
-          <div class="h-full flex flex-col items-center justify-center p-6 text-center text-gray-400 space-y-3">
-            <el-icon size="32" class="opacity-30"><Warning /></el-icon>
-            <h3 class="font-bold text-sm">此版本为首创版本</h3>
-            <p class="text-xs">当前版本 ({{ currentContext?.version || 'V1.0' }}) 没有历史参考父本。</p>
-          </div>
-        </div>
-        <div class="flex-1 overflow-y-auto" v-else>
-          <div v-if="leftPaneTab === 'items'" class="p-4 space-y-4">
-            <div 
-              v-for="item in parentContext.items" 
-              :key="item.id"
-              class="bg-white border border-gray-100 shadow-sm rounded-xl p-4 opacity-80"
-            >
-              <h3 class="font-bold text-gray-800 mb-2 truncate border-b pb-2 border-gray-50 flex items-center gap-2">
-                <span class="w-1.5 h-1.5 rounded-full bg-gray-300"></span>
-                {{ item.title }}
-              </h3>
-              <p class="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap">{{ item.content }}</p>
+
+        <div class="flex-1 overflow-y-auto scrollbar-thin" v-if="!parentContext">
+          <div class="h-full flex flex-col items-center justify-center p-8 text-center space-y-4">
+            <div class="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center">
+              <el-icon size="28" class="text-gray-300"><CopyDocument /></el-icon>
+            </div>
+            <div>
+              <h3 class="font-bold text-sm text-gray-500">此版本为首创版本</h3>
+              <p class="text-xs text-gray-400 mt-1">当前版本 ({{ currentContext?.version || 'V1.0' }}) 没有历史参考父本</p>
             </div>
           </div>
-          <div v-else class="h-full">
-            <EvaluationReportView :report="parentContext.evaluation_report" />
-          </div>
+        </div>
+        <div class="flex-1 overflow-y-auto scrollbar-thin" v-else>
+          <transition name="fade" mode="out-in">
+            <div v-if="leftPaneTab === 'items'" key="items" class="p-4 space-y-3">
+              <div
+                v-for="(item, idx) in parentContext.items"
+                :key="item.id"
+                class="bg-white border border-gray-100 rounded-xl p-4 shadow-sm hover:shadow-md hover:border-gray-200 transition-all duration-200 group"
+              >
+                <div class="flex items-start gap-3">
+                  <span class="w-5 h-5 bg-violet-50 text-violet-500 rounded-md flex items-center justify-center text-[10px] font-black shrink-0 mt-0.5">{{ idx + 1 }}</span>
+                  <div class="flex-1 min-w-0">
+                    <h3 class="font-bold text-gray-800 text-[13px] mb-1.5 truncate">{{ item.title }}</h3>
+                    <p class="text-xs text-gray-500 leading-relaxed whitespace-pre-wrap line-clamp-4">{{ item.content }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div v-else key="report" class="h-full">
+              <EvaluationReportView :report="parentContext.evaluation_report" />
+            </div>
+          </transition>
         </div>
       </aside>
 
-      <!-- Middle Pane: Sandbox Work area -->
       <main class="flex-1 flex flex-col relative bg-white">
-        <!-- Workbench Header -->
-        <div class="h-12 border-b bg-gray-50 flex items-center justify-between px-6 sticky top-0 flex-shrink-0 z-10">
-          <h2 class="font-bold text-gray-800 flex items-center gap-2">
-            <el-icon class="text-blue-500"><EditPen /></el-icon> 修订工作台
+        <div class="h-12 border-b border-gray-100 bg-white/80 backdrop-blur-sm flex items-center justify-between px-6 sticky top-0 flex-shrink-0 z-10">
+          <h2 class="font-bold text-gray-800 flex items-center gap-2 text-[13px]">
+            <div class="w-6 h-6 bg-blue-50 rounded-lg flex items-center justify-center">
+              <el-icon class="text-blue-500" size="14"><EditPen /></el-icon>
+            </div>
+            修订工作台
+            <el-tag size="small" effect="plain" type="info" class="!text-[10px]">{{ localItems.length }} 条</el-tag>
           </h2>
-          <div class="flex items-center gap-2">
-            <el-button v-if="isDirty" type="danger" link @click="handleDiscard">放弃本次所有修改</el-button>
-            <el-button type="primary" :disabled="!isDirty" class="font-bold" @click="handleJumpToEvaluation">
-              发起评估
-            </el-button>
+          
+          <div class="flex items-center gap-4">
+            <!-- 版本修订备注 -->
+            <div class="relative" style="max-width: 400px;">
+              <div class="flex items-center gap-1 cursor-pointer" @click="toggleRevisionNote" style="height: 28px;">
+                <div class="w-5 h-5 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <el-icon size="11" class="text-blue-600"><ChatLineSquare /></el-icon>
+                </div>
+                <span class="font-bold text-blue-700 text-[11px]">版本修订备注</span>
+                <el-icon :class="{ 'rotate-180': revisionNoteExpanded }" class="ml-1 transition-transform duration-300 text-blue-500"><ArrowDown /></el-icon>
+              </div>
+              <transition name="fade">
+                <div v-if="revisionNoteExpanded" class="absolute top-full right-0 mt-1 w-96 bg-white border border-gray-200 rounded-lg shadow-md p-3 z-50">
+                  <el-input
+                    v-model="versionDesc"
+                    type="textarea"
+                    :rows="3"
+                    placeholder="请记录本次版本的修改目标或修订点（如：修复了可测试性评分中提到的语义模糊问题）..."
+                    class="revision-input"
+                  />
+                </div>
+              </transition>
+            </div>
+            
+            <div class="flex items-center gap-2">
+              <el-button v-if="isDirty" type="danger" link size="small" @click="handleDiscard">
+                <el-icon class="mr-1"><RefreshLeft /></el-icon>放弃修改
+              </el-button>
+              <el-button
+                type="primary"
+                :disabled="!isDirty"
+                class="font-bold !rounded-lg"
+                size="small"
+                @click="handleJumpToEvaluation"
+              >
+                <el-icon class="mr-1"><Promotion /></el-icon>发起评估
+              </el-button>
+            </div>
           </div>
         </div>
 
-        <div class="flex-1 overflow-y-auto p-8 bg-slate-50/30">
+        <div class="flex-1 overflow-y-auto p-8 bg-gradient-to-b from-white to-slate-50/50 scrollbar-thin">
           <div class="max-w-4xl mx-auto space-y-6">
-            
-            <!-- Version Remark Section (Top) -->
-            <div class="bg-white border border-blue-100 rounded-2xl p-6 shadow-sm">
-              <div class="flex items-center gap-2 mb-4 text-blue-600">
-                <el-icon size="18"><ChatLineSquare /></el-icon>
-                <span class="font-bold tracking-tight">版本修订备注</span>
-                <span class="text-xs text-gray-400 font-normal">（此备注将随新版本永久保存）</span>
-              </div>
-              <el-input
-                v-model="versionDesc"
-                type="textarea"
-                :rows="3"
-                placeholder="请记录本次版本的修改目标或修订点（如：修复了可测试性评分中提到的语义模糊问题）..."
-                class="revision-input shadow-inner"
-              />
-            </div>
 
-            <div class="flex items-center gap-3 py-4">
+            <div class="flex items-center gap-3 py-3">
               <div class="h-px flex-1 bg-gray-200"></div>
-              <span class="text-xs text-gray-400 uppercase font-black tracking-widest">需求条目修订区</span>
+              <span class="text-[11px] text-gray-400 uppercase font-black tracking-widest">需求条目修订区</span>
               <div class="h-px flex-1 bg-gray-200"></div>
             </div>
 
-            <!-- Items list -->
             <TransitionGroup name="list" tag="div" class="space-y-4 pb-20">
-              <div 
-                v-for="item in localItems" 
+              <div
+                v-for="(item, idx) in localItems"
                 :key="item.id || item._localId"
                 :class="[
-                  'bg-white border rounded-2xl shadow-sm transition-all focus-within:ring-2 focus-within:ring-blue-100 overflow-hidden',
-                  item._isDirty ? 'border-amber-300' : 'border-gray-200'
+                  'bg-white border rounded-2xl shadow-sm transition-all duration-200 overflow-hidden group',
+                  item._isDirty
+                    ? 'border-amber-200 shadow-amber-100/50 hover:shadow-amber-200/50'
+                    : 'border-gray-100 hover:border-gray-200 hover:shadow-md'
                 ]"
               >
-                <div class="px-5 py-3 border-b flex items-center justify-between bg-gray-50/20">
+                <div class="px-5 py-3 border-b flex items-center justify-between" :class="item._isDirty ? 'bg-amber-50/50 border-amber-100' : 'bg-gray-50/30 border-gray-50'">
                   <div class="flex items-center gap-3 flex-1">
-                    <el-input v-model="item.title" placeholder="需求标题" size="small" class="max-w-[300px]" disabled @change="markDirty(item)"/>
-                    <el-tag v-if="item._isDirty" size="small" type="warning" effect="plain" class="scale-90">有改动</el-tag>
+                    <span class="w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-black shrink-0"
+                      :class="item._isDirty ? 'bg-amber-100 text-amber-600' : 'bg-gray-100 text-gray-400'">
+                      {{ idx + 1 }}
+                    </span>
+                    <el-input v-model="item.title" placeholder="需求标题" size="small" class="max-w-[300px] !font-bold" disabled @change="markDirty(item)"/>
+                    <transition name="fade">
+                      <el-tag v-if="item._isDirty" size="small" type="warning" effect="light" class="!scale-90">
+                        <el-icon class="mr-0.5"><EditPen /></el-icon>有改动
+                      </el-tag>
+                    </transition>
                   </div>
-                  <el-button size="small" circle text type="danger" icon="Delete" @click="handleLocalDelete(item)"></el-button>
+                  <el-button size="small" circle text type="danger" icon="Delete" @click="handleLocalDelete(item)" class="opacity-0 group-hover:opacity-100 transition-opacity"></el-button>
                 </div>
                 <div class="p-5">
                   <el-input
@@ -141,27 +189,32 @@
               </div>
             </TransitionGroup>
 
-            <div v-if="localItems.length === 0" class="py-20 text-center text-gray-300">
-              <el-icon size="48" class="mb-2 opacity-20"><DocumentDelete /></el-icon>
-              <p>内容已被清空</p>
+            <div v-if="localItems.length === 0" class="py-20 text-center">
+              <div class="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <el-icon size="28" class="text-gray-300"><DocumentDelete /></el-icon>
+              </div>
+              <p class="text-gray-400 font-medium">内容已被清空</p>
+              <p class="text-xs text-gray-300 mt-1">所有需求条目已移除</p>
             </div>
           </div>
         </div>
       </main>
 
-      <!-- Right Pane: Current Evaluation Reference -->
-      <aside 
-        class="border-l bg-gray-50 flex flex-col z-0 transition-all duration-300 ease-in-out"
+      <aside
+        class="border-l border-gray-100 bg-gradient-to-b from-slate-50 to-gray-50 flex flex-col z-0 transition-all duration-300 ease-in-out"
         :class="rightPaneOpen ? 'w-1/3 min-w-[320px]' : 'w-0 border-none opacity-0 overflow-hidden'"
       >
-        <div class="h-12 border-b bg-white flex items-center justify-between px-4 sticky top-0 flex-shrink-0 whitespace-nowrap">
-          <h2 class="font-bold text-gray-700 flex items-center gap-2">
-            <el-icon class="text-green-500"><DataLine /></el-icon> 当前版本评估参考
+        <div class="h-12 border-b border-gray-100 bg-white/80 backdrop-blur-sm flex items-center justify-between px-4 sticky top-0 flex-shrink-0 whitespace-nowrap">
+          <h2 class="font-bold text-gray-700 flex items-center gap-2 text-[13px]">
+            <div class="w-6 h-6 bg-emerald-50 rounded-lg flex items-center justify-center">
+              <el-icon class="text-emerald-500" size="14"><DataLine /></el-icon>
+            </div>
+            当前版本评估参考
           </h2>
-          <el-button link icon="Close" @click="rightPaneOpen = false"></el-button>
+          <el-button link icon="Close" size="small" @click="rightPaneOpen = false" class="!text-gray-400 hover:!text-gray-600"></el-button>
         </div>
-        
-        <div class="flex-1 overflow-y-auto">
+
+        <div class="flex-1 overflow-y-auto scrollbar-thin">
           <EvaluationReportView :report="currentContext?.evaluation_report" class="h-full" />
         </div>
       </aside>
@@ -176,18 +229,16 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { getBaselineFullContext, type BaselineContextInfo } from '@/services/api'
 import EvaluationReportView from '@/components/EvaluationReportView.vue'
 import { useEvaluationStore } from '@/store'
-import { Notebook, CopyDocument, Warning, EditPen, DataLine, Close, Plus, Loading, Delete, ChatLineSquare, DocumentDelete } from '@element-plus/icons-vue'
+import { Notebook, CopyDocument, Warning, EditPen, DataLine, Close, Plus, Loading, Delete, ChatLineSquare, DocumentDelete, RefreshLeft, Promotion, Hide, View, ArrowDown } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
 const evalStore = useEvaluationStore()
 const versionId = computed(() => Number(route.params.versionId))
 
-// -- State Context --
 const currentContext = ref<BaselineContextInfo | null>(null)
 const parentContext = ref<BaselineContextInfo | null>(null)
 
-// -- Local Editing State (Sandbox / Draft) --
 interface LocalItem {
   id?: number
   _localId?: string
@@ -202,17 +253,20 @@ const localItems = ref<LocalItem[]>([])
 const versionDesc = ref('')
 const leftPaneTab = ref<'items'|'report'>('items')
 const rightPaneOpen = ref(true)
+const revisionNoteExpanded = ref(false)
+
+function toggleRevisionNote() {
+  revisionNoteExpanded.value = !revisionNoteExpanded.value
+}
 
 function toggleRightPane() {
   rightPaneOpen.value = !rightPaneOpen.value
 }
 
-// Computed dirty status
 const isDirty = computed(() => {
   return localItems.value.some(item => item._isDirty) || !!versionDesc.value.trim()
 })
 
-// Navigation Guard
 onBeforeRouteLeave((to, from, next) => {
   if (isDirty.value && to.path !== '/') {
     ElMessageBox.confirm(
@@ -238,8 +292,7 @@ async function loadPageData() {
     const res = await getBaselineFullContext(versionId.value)
     currentContext.value = res.current
     parentContext.value = res.parent || null
-    
-    // Hydrate local sandbox memory
+
     localItems.value = res.current.items.map(item => ({
       id: item.id,
       title: item.title,
@@ -256,12 +309,10 @@ async function loadPageData() {
   }
 }
 
-// -- Lifecycle Load --
 onMounted(() => {
   loadPageData()
 })
 
-// -- Interaction Methods --
 function goBack() {
   router.back()
 }
@@ -287,29 +338,29 @@ function handleLocalDelete(item: LocalItem) {
   }
 }
 
-// -- The "Portal" jump to Evaluation Page --
 function handleJumpToEvaluation() {
-  // 1. Pack items into evaluation store
+  // 验证版本备注是否填写
+  if (!versionDesc.value.trim()) {
+    ElMessage.error('请填写版本修订备注')
+    return
+  }
+  
   evalStore.projectName = currentContext.value?.project_name || '基准修订项目'
   evalStore.requirementTitle = '修订版需求文档'
   evalStore.requirementType = 'text'
-  evalStore.versionDesc = versionDesc.value // 将备注传过去
-  
+  evalStore.versionDesc = versionDesc.value
+
   evalStore.items = localItems.value.map(i => ({
     parent_item_id: i.parent_item_id || i.id || null,
     title: i.title,
     content: i.content,
-    // 逻辑修正：由于基准详情页已剥离“新建卡片”功能，所有在此修改的卡片均属存量卡片。
-    // 因此状态只有“已修改”和“未修改”，彻底修复跳转后变为新增从而导致名称可编辑的问题。
     status: i._isDirty ? 'modified' : 'unchanged'
   }))
-  
-  // 2. Set context indicators
+
   evalStore.referencedBaselineIds = [versionId.value]
   evalStore.editMode = 'incremental'
-  evalStore.isAutoStart = true // 标记跳转后自动开始
-  
-  // 3. Jump to evaluation root (Home page '/')
+  evalStore.isAutoStart = true
+
   router.push('/')
 }
 </script>
@@ -322,22 +373,54 @@ function handleJumpToEvaluation() {
 .list-enter-from,
 .list-leave-to {
   opacity: 0;
-  transform: translateX(-10px);
+  transform: translateY(-8px);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 
 .revision-input :deep(.el-textarea__inner) {
-  border: none !important;
+  border: 1px solid #e2e8f0 !important;
   box-shadow: none !important;
   font-family: inherit;
-  font-size: 14px;
-  line-height: 1.6;
-  padding: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  padding: 8px 12px !important;
+  background: white !important;
+  border-radius: 8px;
 }
 
 .revision-content :deep(.el-textarea__inner) {
-  border: none !important;
+  border: 1px solid #e2e8f0 !important;
   box-shadow: none !important;
-  background: transparent !important;
-  padding: 0 !important;
+  background: white !important;
+  padding: 8px 12px !important;
+  font-size: 13px;
+  line-height: 1.7;
+  border-radius: 8px;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 2px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #cbd5e1;
+}
+
+.line-clamp-4 {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 </style>
