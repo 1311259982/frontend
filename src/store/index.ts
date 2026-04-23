@@ -631,6 +631,19 @@ export const useEvaluationStore = defineStore('evaluation', {
     activeEvaluationId: null as number | null,
     history: [] as any[],
     isHistoryLoaded: false,
+    retrievalConfig: {
+      strategy: 'hybrid' as 'vector' | 'keyword' | 'hybrid' | 'multi_sample',
+      topK: 10,
+      rerankRule: 'relevance' as 'relevance' | 'timestamp' | 'priority',
+      incremental: true,
+    },
+    hasCustomizedRetrieval: false,
+    customPresets: (() => {
+      try {
+        const raw = localStorage.getItem('das_custom_presets');
+        return raw ? JSON.parse(raw) : [];
+      } catch { return []; }
+    })() as { name: string; config: any }[],
   }),
   getters: {
     aggregatedHistory(state) {
@@ -878,6 +891,33 @@ export const useEvaluationStore = defineStore('evaluation', {
       this.draftId = null;
       this.activeEvaluationId = null;
       if (this.syncTimer) clearTimeout(this.syncTimer);
+    },
+
+    saveCustomPreset(name: string) {
+      const preset = {
+        name,
+        config: { ...this.retrievalConfig },
+      };
+      const existingIndex = this.customPresets.findIndex(p => p.name === name);
+      if (existingIndex >= 0) {
+        this.customPresets[existingIndex] = preset;
+      } else {
+        this.customPresets.push(preset);
+      }
+      localStorage.setItem('das_custom_presets', JSON.stringify(this.customPresets));
+    },
+
+    deleteCustomPreset(name: string) {
+      this.customPresets = this.customPresets.filter(p => p.name !== name);
+      localStorage.setItem('das_custom_presets', JSON.stringify(this.customPresets));
+    },
+
+    applyCustomPreset(name: string) {
+      const preset = this.customPresets.find(p => p.name === name);
+      if (preset) {
+        this.retrievalConfig = { ...preset.config };
+        this.hasCustomizedRetrieval = true;
+      }
     },
 
     /**

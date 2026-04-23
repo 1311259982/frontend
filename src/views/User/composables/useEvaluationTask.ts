@@ -36,6 +36,12 @@ export function useEvaluationTask(settings: Ref<{ depth: number; selectedModelId
           standard_ids: standardIds,
           instructions: evalStore.instructions || undefined,
           model_id: unref(settings).selectedModelId || modelStore.defaultModelId,
+          retrieval_config: {
+            strategy: evalStore.retrievalConfig.strategy,
+            top_k: evalStore.retrievalConfig.topK,
+            rerank_rule: evalStore.retrievalConfig.rerankRule,
+            incremental: evalStore.retrievalConfig.incremental,
+          },
         };
         const { evaluation_id } = await submitDraft(evalStore.draftId, payload);
         _currentEvaluationId = evaluation_id;
@@ -63,6 +69,12 @@ export function useEvaluationTask(settings: Ref<{ depth: number; selectedModelId
             status: item.status,
             sort_order: idx,
           })) : undefined,
+          retrieval_config: {
+            strategy: evalStore.retrievalConfig.strategy,
+            top_k: evalStore.retrievalConfig.topK,
+            rerank_rule: evalStore.retrievalConfig.rerankRule,
+            incremental: evalStore.retrievalConfig.incremental,
+          },
         };
 
         const { evaluation_id } = await startEvaluation(payload);

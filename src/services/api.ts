@@ -85,6 +85,13 @@ export interface EvaluationItemCreate {
   sort_order: number;
 }
 
+export interface RetrievalConfig {
+  strategy: 'vector' | 'keyword' | 'hybrid' | 'multi_sample';
+  top_k: number;
+  rerank_rule: 'relevance' | 'timestamp' | 'priority';
+  incremental: boolean;
+}
+
 export interface StartEvaluationPayload {
   project_name: string;
   requirement_title: string;
@@ -98,6 +105,7 @@ export interface StartEvaluationPayload {
   model_id?: number;
   edit_mode?: string;
   items?: EvaluationItemCreate[];
+  retrieval_config?: RetrievalConfig;
 }
 
 export interface DraftEvaluationPayload {
@@ -113,6 +121,7 @@ export interface SubmitDraftPayload {
   standard_ids: number[];
   instructions?: string;
   model_id?: number;
+  retrieval_config?: RetrievalConfig;
 }
 
 export interface EvaluationReport {

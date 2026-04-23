@@ -414,6 +414,10 @@ export const updateStandardStatus = async (_id: number, _status: string): Promis
     return;
 };
 
+export const updateStandardPriority = async (_id: number, _priority: string): Promise<void> => {
+    return;
+};
+
 /**
  * 移除上传需求文档（Mock 物理删除）
  */

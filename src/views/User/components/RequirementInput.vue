@@ -178,13 +178,26 @@
       />
     </section>
 
-    <!-- Step 3: Parameters (Optional) -->
-    <section v-if="evalStore.currentStep === 3" class="space-y-4 p-6 bg-blue-50/50 rounded-2xl border border-blue-100">
+    <!-- Step 3: Parameters -->
+    <section v-if="evalStore.currentStep === 3" class="space-y-6 p-6 bg-blue-50/50 rounded-2xl border border-blue-100">
       <h3 class="text-sm font-bold text-blue-800 flex items-center gap-2 uppercase tracking-widest">评估参数设置</h3>
+      
+      <!-- 第一行：评估深度 + 模型选择 -->
       <div class="grid grid-cols-2 gap-8">
-        <el-form-item label="评估深度">
-          <el-slider v-model="localSettings.depth" :step="1" :max="3" show-stops />
+        <!-- 评估深度：折叠时显示，展开时隐藏 -->
+        <el-form-item v-if="!isAdvancedOpen" label="评估深度">
+          <el-tooltip :content="depthTooltip" placement="top">
+            <el-slider v-model="localSettings.depth" :min="1" :max="3" :step="1" show-stops @change="handleDepthChange" :show-tooltip="false" />
+          </el-tooltip>
         </el-form-item>
+        <!-- 展开高级选项时，显示当前深度为只读标签 -->
+        <el-form-item v-else label="评估深度">
+          <div class="flex items-center gap-2 h-8">
+            <el-tag size="small" type="info">{{ depthLabel[localSettings.depth] }}</el-tag>
+            <span class="text-xs text-gray-400">（高级选项已展开，由预设方案控制）</span>
+          </div>
+        </el-form-item>
+
         <el-form-item label="模型选择">
           <el-select 
             v-model="localSettings.selectedModelId" 
@@ -201,7 +214,161 @@
           </el-select>
         </el-form-item>
       </div>
+
+      <!-- 高级选项折叠面板 -->
+      <div class="border border-blue-100 rounded-xl overflow-hidden">
+        <div
+          class="flex items-center justify-between px-4 py-3 bg-white cursor-pointer hover:bg-gray-50 transition-colors"
+          @click="isAdvancedOpen = !isAdvancedOpen"
+        >
+          <div class="flex items-center gap-2">
+            <el-icon :class="isAdvancedOpen ? 'rotate-90' : ''" class="transition-transform duration-200"><arrow-right /></el-icon>
+            <span class="text-sm font-bold text-gray-700">高级选项</span>
+            <el-tag v-if="evalStore.hasCustomizedRetrieval && !isAdvancedOpen" size="small" type="warning" class="ml-2">已自定义</el-tag>
+          </div>
+          <span class="text-xs text-gray-400">{{ isAdvancedOpen ? '收起' : '展开' }}</span>
+        </div>
+
+        <div v-show="isAdvancedOpen" class="bg-white border-t border-blue-100 p-4 space-y-4">
+          <!-- 预设方案选择（移入高级选项内部） -->
+          <div class="space-y-2">
+            <label class="text-xs font-bold text-gray-500 uppercase tracking-wider">预设方案</label>
+            <div class="flex gap-3 items-center flex-wrap">
+              <el-button
+                v-for="preset in systemPresets"
+                :key="preset.key"
+                size="small"
+                :type="activePreset === preset.key ? 'primary' : 'default'"
+                plain
+                @click="applyPreset(preset.key)"
+              >
+                {{ preset.label }}
+              </el-button>
+              <!-- 自定义预设下拉 -->
+              <el-dropdown v-if="evalStore.customPresets.length > 0" @command="handleCustomPresetCommand">
+                <el-button
+                  size="small"
+                  :type="activePreset === 'custom' ? 'primary' : 'default'"
+                  plain
+                >
+                  自定义 <el-icon class="el-icon--right"><arrow-down /></el-icon>
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item
+                      v-for="cp in evalStore.customPresets"
+                      :key="cp.name"
+                      :command="{ action: 'apply', name: cp.name }"
+                    >
+                      <div class="flex items-center justify-between w-40">
+                        <span>{{ cp.name }}</span>
+                        <el-icon class="text-gray-400 hover:text-red-500" @click.stop="handleCustomPresetCommand({ action: 'delete', name: cp.name })"><delete /></el-icon>
+                      </div>
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
+          </div>
+
+          <!-- 检索策略配置 -->
+          <div class="bg-gray-50 rounded-xl p-4 space-y-4">
+            <div class="flex items-center justify-between">
+              <span class="text-sm font-bold text-gray-700">检索策略配置</span>
+              <el-tag v-if="evalStore.hasCustomizedRetrieval" size="small" type="warning">已自定义</el-tag>
+            </div>
+            
+            <div class="grid grid-cols-3 gap-6">
+              <!-- 检索方式 -->
+              <el-form-item label="检索方式">
+                <el-select v-model="evalStore.retrievalConfig.strategy" class="w-full" @change="markCustomized">
+                  <el-option label="纯向量检索 (vector)" value="vector" />
+                  <el-option label="关键词匹配 (keyword)" value="keyword" />
+                  <el-option label="混合检索 (hybrid)" value="hybrid" />
+                  <el-option label="多重采样检索 (multi_sample)" value="multi_sample" />
+                </el-select>
+                <div class="text-xs text-gray-400 mt-1">{{ strategyDesc[evalStore.retrievalConfig.strategy] }}</div>
+              </el-form-item>
+
+              <!-- top-k：仅输入框 -->
+              <el-form-item label="Top-K 数量">
+                <el-input-number v-model="evalStore.retrievalConfig.topK" :min="1" :max="100" size="small" class="w-40" @change="markCustomized" />
+              </el-form-item>
+
+              <!-- 重排序规则 -->
+              <el-form-item label="重排序规则">
+                <el-select v-model="evalStore.retrievalConfig.rerankRule" class="w-full" @change="markCustomized">
+                  <el-option label="相关性排序 (relevance)" value="relevance" />
+                  <el-option label="时间戳排序 (timestamp)" value="timestamp" />
+                  <el-option label="优先级排序 (priority)" value="priority" />
+                </el-select>
+                <div class="text-xs text-gray-400 mt-1">{{ rerankDesc[evalStore.retrievalConfig.rerankRule] }}</div>
+              </el-form-item>
+            </div>
+          </div>
+
+          <!-- 增量评估开关 -->
+          <div class="bg-gray-50 rounded-xl p-4 flex items-center justify-between">
+            <div class="space-y-1">
+              <div class="text-sm font-bold text-gray-700">增量评估</div>
+              <div class="text-xs text-gray-400">仅对新增/修改/删除的卡片做深度评估，未修改卡片保留上下文</div>
+            </div>
+            <div class="flex items-center gap-2">
+              <el-switch
+                v-model="evalStore.retrievalConfig.incremental"
+                :disabled="!canIncremental"
+                active-text="开启"
+                inactive-text="关闭"
+                @change="markCustomized"
+              />
+              <el-tooltip v-if="!canIncremental" content="首次评估默认为全量评估，不适用增量评估" placement="top">
+                <el-icon class="text-gray-400"><warning /></el-icon>
+              </el-tooltip>
+            </div>
+          </div>
+
+          <!-- 资源消耗预估器 -->
+          <div class="bg-gray-50 rounded-xl p-4 space-y-3">
+            <div class="text-sm font-bold text-gray-700">资源消耗预估</div>
+            <div class="grid grid-cols-3 gap-4">
+              <div class="bg-white rounded-lg p-3 text-center">
+                <div class="text-xs text-gray-400 mb-1">Token 消耗预估</div>
+                <div class="text-lg font-bold text-blue-600">{{ estimatedTokens }}</div>
+                <div class="text-xs text-gray-400">tokens</div>
+              </div>
+              <div class="bg-white rounded-lg p-3 text-center">
+                <div class="text-xs text-gray-400 mb-1">时间成本预估</div>
+                <div class="text-lg font-bold text-blue-600">{{ estimatedTime }}</div>
+                <div class="text-xs text-gray-400">秒</div>
+              </div>
+              <div class="bg-white rounded-lg p-3 text-center">
+                <div class="text-xs text-gray-400 mb-1">性能指标</div>
+                <div class="flex items-center justify-center gap-2 mt-1">
+                  <el-tag size="small" :type="accuracyType">准确率: {{ accuracyLabel }}</el-tag>
+                  <el-tag size="small" :type="speedType">速度: {{ speedLabel }}</el-tag>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 保存自定义预设按钮 -->
+          <div class="flex justify-end">
+            <el-button size="small" type="primary" plain icon="Plus" @click="showSavePresetDialog = true">
+              保存当前配置为预设
+            </el-button>
+          </div>
+        </div>
+      </div>
     </section>
+
+    <!-- 保存预设对话框 -->
+    <el-dialog v-model="showSavePresetDialog" title="保存自定义预设" width="400px">
+      <el-input v-model="newPresetName" placeholder="请输入预设名称，如：我的快速配置" />
+      <template #footer>
+        <el-button @click="showSavePresetDialog = false">取消</el-button>
+        <el-button type="primary" @click="saveCurrentPreset">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -209,8 +376,8 @@
 import { ref, computed, watch, reactive, onBeforeUnmount } from 'vue';
 import { useEvaluationStore, useBaselineStore, useModelStore } from '@/store';
 import { uploadRequirementFile } from '@/services';
-import { ElMessage } from 'element-plus';
-import { Plus, Connection, View, Close, Document, Delete, UploadFilled, ChatLineRound, DocumentCopy, DocumentAdd } from '@element-plus/icons-vue';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import { Plus, Connection, View, Close, Document, Delete, UploadFilled, ChatLineRound, DocumentCopy, DocumentAdd, Warning, ArrowRight, ArrowDown } from '@element-plus/icons-vue';
 
 const props = defineProps<{ settings: { depth: number; selectedModelId: number | null } }>();
 const emit = defineEmits(['update:settings', 'openBaselineDrawer', 'previewFile']);
@@ -220,6 +387,9 @@ const baselineStore = useBaselineStore();
 const modelStore = useModelStore();
 
 const isEditingParsedText = ref(false);
+const isAdvancedOpen = ref(false);
+const showSavePresetDialog = ref(false);
+const newPresetName = ref('');
 
 const localSettings = reactive({ ...props.settings });
 
@@ -279,4 +449,195 @@ const handleReqFileUploadAsCard = async (file: any) => {
     isUploadingDoc.value = false;
   }
 };
+
+// ─────────────────────────────────────────────
+// 检索策略与评估参数面板逻辑
+// ─────────────────────────────────────────────
+
+const systemPresets = [
+  { key: 'performance', label: '性能优先' },
+  { key: 'cost', label: '成本优先' },
+  { key: 'balanced', label: '平衡模式' },
+  { key: 'depth', label: '深度优先' },
+];
+
+const activePreset = ref<string | null>(null);
+
+const presetConfigs: Record<string, any> = {
+  performance: { strategy: 'vector', topK: 5, rerankRule: 'relevance', incremental: true },
+  cost: { strategy: 'keyword', topK: 3, rerankRule: 'priority', incremental: true },
+  balanced: { strategy: 'hybrid', topK: 10, rerankRule: 'relevance', incremental: true },
+  depth: { strategy: 'multi_sample', topK: 20, rerankRule: 'priority', incremental: false },
+};
+
+const depthToPresetMap: Record<number, string> = {
+  1: 'performance',
+  2: 'balanced',
+  3: 'depth',
+};
+
+const depthDefaults: Record<number, any> = {
+  1: { strategy: 'vector', topK: 5, rerankRule: 'relevance' },
+  2: { strategy: 'hybrid', topK: 10, rerankRule: 'relevance' },
+  3: { strategy: 'multi_sample', topK: 20, rerankRule: 'priority' },
+};
+
+const depthLabel: Record<number, string> = {
+  1: '浅评估',
+  2: '标准评估',
+  3: '深度评估',
+};
+
+const depthTooltip = computed(() => {
+  const depth = localSettings.depth;
+  if (depth === 1) return '浅评估：性能优先，纯向量检索，Top-K=5';
+  if (depth === 2) return '标准评估：平衡模式，混合检索，Top-K=10';
+  if (depth === 3) return '深度评估：深度优先，多重采样检索，Top-K=20';
+  return '';
+});
+
+function applyPreset(key: string) {
+  activePreset.value = key;
+  const cfg = presetConfigs[key];
+  if (cfg) {
+    evalStore.retrievalConfig.strategy = cfg.strategy;
+    evalStore.retrievalConfig.topK = cfg.topK;
+    evalStore.retrievalConfig.rerankRule = cfg.rerankRule;
+    evalStore.retrievalConfig.incremental = cfg.incremental;
+    evalStore.hasCustomizedRetrieval = true;
+  }
+}
+
+async function handleDepthChange(val: number) {
+  const targetPreset = depthToPresetMap[val];
+  if (evalStore.hasCustomizedRetrieval) {
+    try {
+      await ElMessageBox.confirm(
+        '切换评估深度将覆盖当前自定义的检索配置，是否继续？',
+        '确认覆盖',
+        { confirmButtonText: '覆盖', cancelButtonText: '保留当前配置', type: 'warning' }
+      );
+      // 用户确认覆盖
+      const defaults = depthDefaults[val];
+      if (defaults) {
+        evalStore.retrievalConfig.strategy = defaults.strategy;
+        evalStore.retrievalConfig.topK = defaults.topK;
+        evalStore.retrievalConfig.rerankRule = defaults.rerankRule;
+      }
+      evalStore.hasCustomizedRetrieval = false;
+      activePreset.value = targetPreset || null;
+    } catch {
+      // 用户取消，仅更新滑块值（已由 el-slider 绑定）
+      // 不需要额外操作
+    }
+  } else {
+    // 未自定义，直接应用默认值
+    const defaults = depthDefaults[val];
+    if (defaults) {
+      evalStore.retrievalConfig.strategy = defaults.strategy;
+      evalStore.retrievalConfig.topK = defaults.topK;
+      evalStore.retrievalConfig.rerankRule = defaults.rerankRule;
+    }
+    activePreset.value = targetPreset || null;
+  }
+}
+
+function markCustomized() {
+  evalStore.hasCustomizedRetrieval = true;
+  activePreset.value = null; // 手动修改后取消预设激活状态
+}
+
+function handleCustomPresetCommand(command: { action: string; name: string }) {
+  if (command.action === 'apply') {
+    evalStore.applyCustomPreset(command.name);
+    activePreset.value = 'custom';
+  } else if (command.action === 'delete') {
+    evalStore.deleteCustomPreset(command.name);
+    if (activePreset.value === 'custom') {
+      activePreset.value = null;
+    }
+  }
+}
+
+function saveCurrentPreset() {
+  const name = newPresetName.value.trim();
+  if (!name) {
+    ElMessage.warning('请输入预设名称');
+    return;
+  }
+  evalStore.saveCustomPreset(name);
+  ElMessage.success(`预设 "${name}" 已保存`);
+  showSavePresetDialog.value = false;
+  newPresetName.value = '';
+}
+
+const canIncremental = computed(() => {
+  return evalStore.referencedBaselineIds.length > 0;
+});
+
+// 策略描述
+const strategyDesc: Record<string, string> = {
+  vector: '语义匹配，速度快，适合浅评估',
+  keyword: '精确匹配，零向量开销，成本最低',
+  hybrid: '向量候选+关键词过滤，平衡召回与精度',
+  multi_sample: '多查询变体并行检索，召回率最高，适合深度评估',
+};
+
+// 重排序描述
+const rerankDesc: Record<string, string> = {
+  relevance: '按向量相似度排序（默认）',
+  timestamp: '按标准文件上传时间排序',
+  priority: '按异味优先级排序（high > medium > low）',
+};
+
+// 资源消耗预估
+const estimatedTokens = computed(() => {
+  const textLength = evalStore.textContent?.length || 0;
+  const topK = evalStore.retrievalConfig.topK;
+  const strategy = evalStore.retrievalConfig.strategy;
+  const avgChunkToken = 150;
+  const multiplier = strategy === 'vector' ? 1.0 : strategy === 'keyword' ? 0.8 : strategy === 'hybrid' ? 1.2 : 1.5;
+  return Math.round(textLength * 0.5 + topK * avgChunkToken * multiplier);
+});
+
+const estimatedTime = computed(() => {
+  const textLength = evalStore.textContent?.length || 0;
+  const topK = evalStore.retrievalConfig.topK;
+  const strategy = evalStore.retrievalConfig.strategy;
+  const modelId = localSettings.selectedModelId;
+  const model = modelStore.models.find(m => m.id === modelId);
+  const modelName = model?.name || '';
+  let factor = 1.0;
+  if (modelName.includes('轻量') || modelName.includes('lite') || modelName.includes('mini')) factor = 0.5;
+  else if (modelName.includes('大') || modelName.includes('pro') || modelName.includes('max')) factor = 2.0;
+  const baseTime = strategy === 'multi_sample' ? 3.0 : strategy === 'hybrid' ? 1.5 : 0.5;
+  return (baseTime + topK * 0.05 + (textLength / 1000) * factor).toFixed(1);
+});
+
+const accuracyLabel = computed(() => {
+  const s = evalStore.retrievalConfig.strategy;
+  const k = evalStore.retrievalConfig.topK;
+  if (s === 'multi_sample' && k >= 15) return '高';
+  if (s === 'hybrid' && k >= 10) return '中';
+  if (s === 'vector' && k >= 5) return '中';
+  return '低';
+});
+
+const accuracyType = computed(() => {
+  const label = accuracyLabel.value;
+  return label === '高' ? 'success' : label === '中' ? 'warning' : 'info';
+});
+
+const speedLabel = computed(() => {
+  const s = evalStore.retrievalConfig.strategy;
+  const k = evalStore.retrievalConfig.topK;
+  if (s === 'keyword' || (s === 'vector' && k <= 5)) return '快';
+  if (s === 'hybrid' && k <= 10) return '中';
+  return '慢';
+});
+
+const speedType = computed(() => {
+  const label = speedLabel.value;
+  return label === '快' ? 'success' : label === '中' ? 'warning' : 'info';
+});
 </script>
