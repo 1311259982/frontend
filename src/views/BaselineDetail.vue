@@ -97,11 +97,6 @@
                             <el-icon><DocumentDelete /></el-icon>
                             <span>已删除</span>
                           </div>
-                          <div v-else-if="getParentItemStatus(row.parent.id) === 'modified'" 
-                            class="flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-600 border border-amber-200 rounded-full text-[10px] font-bold">
-                            <el-icon><InfoFilled /></el-icon>
-                            <span>已修改</span>
-                          </div>
                         </div>
                       </transition>
                     </div>
@@ -206,12 +201,16 @@
 
                     <transition name="fade">
                       <div class="flex items-center gap-1.5 ml-2">
-                        <el-tag v-if="getItemStatusTag(row.current) === 'modified'" size="small" type="warning" effect="light" class="!scale-90">
-                          <el-icon class="mr-0.5"><EditPen /></el-icon>已修改
-                        </el-tag>
-                        <el-tag v-else-if="getItemStatusTag(row.current) === 'added'" size="small" type="success" effect="light" class="!scale-90">
-                          <el-icon class="mr-0.5"><CirclePlus /></el-icon>新增条目
-                        </el-tag>
+                        <div v-if="getItemStatusTag(row.current) === 'modified'" 
+                          class="flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-600 border border-amber-200 rounded-full text-[10px] font-bold">
+                          <el-icon><EditPen /></el-icon>
+                          <span>已修改</span>
+                        </div>
+                        <div v-else-if="getItemStatusTag(row.current) === 'added'" 
+                          class="flex items-center gap-1 px-2 py-0.5 bg-green-50 text-green-600 border border-green-200 rounded-full text-[10px] font-bold">
+                          <el-icon><CirclePlus /></el-icon>
+                          <span>新增条目</span>
+                        </div>
                       </div>
                     </transition>
                   </div>
@@ -332,7 +331,18 @@ function toggleRightPane() {
 }
 
 const isDirty = computed(() => {
-  return localItems.value.some(item => item._isDirty) || !!versionDesc.value.trim()
+  if (!currentContext.value) return false
+  
+  // 1. 内容修改
+  const hasContentChanges = localItems.value.some(item => item._isDirty)
+  
+  // 2. 结构修改（删除或新增）
+  const hasStructuralChanges = localItems.value.length !== currentContext.value.items.length
+  
+  // 3. 备注变动
+  const hasDescChanges = !!versionDesc.value.trim()
+  
+  return hasContentChanges || hasStructuralChanges || hasDescChanges
 })
 
 onBeforeRouteLeave((to, from, next) => {
@@ -437,6 +447,8 @@ function getCurrentItemContent(parentItemId: number, title: string): string {
 
 // 复杂的对齐行逻辑
 const alignedRows = computed(() => {
+  if (!currentContext.value) return []
+  
   if (!parentContext.value) {
     return localItems.value.map((item, idx) => ({ 
       parent: null, current: item, pIdx: -1, cIdx: idx 
@@ -448,24 +460,26 @@ const alignedRows = computed(() => {
   const parentItems = [...parentContext.value.items]
   const usedCurrentIndices = new Set<number>()
 
-  // 1. 遍历父版本，寻找匹配项
+  // 第一步：按父版本顺序进行对齐
   parentItems.forEach((pItem, pIdx) => {
-    const cIdx = currentItems.findIndex((c, idx) => {
-      if (usedCurrentIndices.has(idx)) return false
-      // 匹配逻辑：ID 匹配 或 标题匹配（容错）
-      return (c.parent_item_id === pItem.id) || (!c.parent_item_id && c.title === pItem.title)
-    })
+    // 优先匹配 ID
+    let cIdx = currentItems.findIndex((c, idx) => !usedCurrentIndices.has(idx) && c.parent_item_id === pItem.id)
+    
+    // 如果 ID 没对上（可能是脏数据），尝试匹配标题
+    if (cIdx === -1) {
+      cIdx = currentItems.findIndex((c, idx) => !usedCurrentIndices.has(idx) && c.title === pItem.title)
+    }
 
     if (cIdx !== -1) {
       rows.push({ parent: pItem, current: currentItems[cIdx], pIdx, cIdx })
       usedCurrentIndices.add(cIdx)
     } else {
-      // 被删除了
+      // 在当前版本中找不到了 -> 已删除
       rows.push({ parent: pItem, current: null, pIdx, cIdx: -1 })
     }
   })
 
-  // 2. 剩下的就是纯新增的
+  // 第二步：将当前版本中剩下的项（新增项）追加到末尾
   currentItems.forEach((cItem, cIdx) => {
     if (!usedCurrentIndices.has(cIdx)) {
       rows.push({ parent: null, current: cItem, pIdx: -1, cIdx })
