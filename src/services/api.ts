@@ -449,6 +449,43 @@ export interface BaselineItemExport {
   markdown_content: string;
 }
 
+export interface DiffSegment {
+  op: 'equal' | 'insert' | 'delete';
+  text: string;
+}
+
+export interface ItemDiffStats {
+  addedChars: number;
+  deletedChars: number;
+  unchangedChars: number;
+}
+
+export interface ItemDiff {
+  itemId: number;
+  parentItemId: number | null;
+  status: 'new' | 'deleted' | 'modified' | 'unchanged';
+  titleDiff: DiffSegment[];
+  contentDiff: DiffSegment[];
+  stats: ItemDiffStats;
+}
+
+export interface BaselineDiffSummary {
+  totalItems: number;
+  newItems: number;
+  deletedItems: number;
+  modifiedItems: number;
+  unchangedItems: number;
+  totalAddedChars: number;
+  totalDeletedChars: number;
+}
+
+export interface BaselineDiffResponse {
+  currentVersion: string;
+  parentVersion: string | null;
+  items: ItemDiff[];
+  summary: BaselineDiffSummary;
+}
+
 /**
  * 获取某版本的全部积木块
  * GET /api/baselines/{versionId}/items
@@ -495,5 +532,13 @@ export const deleteBaselineItem = (versionId: number, itemId: number): Promise<v
  */
 export const exportBaselineItems = (versionId: number): Promise<BaselineItemExport> => {
   return http.get(`/api/baselines/${versionId}/export`);
+};
+
+/**
+ * 获取当前版本与父版本的字符级 diff 对比结果
+ * GET /api/baselines/{versionId}/diff
+ */
+export const getBaselineDiff = (versionId: number): Promise<BaselineDiffResponse> => {
+  return http.get(`/api/baselines/${versionId}/diff`);
 };
 

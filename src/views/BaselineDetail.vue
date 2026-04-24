@@ -41,7 +41,11 @@
     </header>
 
     <div class="flex-1 flex overflow-hidden">
-      <aside class="w-1/3 min-w-[350px] border-r border-gray-100 bg-gradient-to-b from-slate-50 to-gray-50 flex flex-col z-0">
+      <!-- 左栏：父版本参考 -->
+      <aside
+        ref="leftPaneRef"
+        class="w-1/3 min-w-[350px] border-r border-gray-100 bg-gradient-to-b from-slate-50 to-gray-50 flex flex-col z-0"
+      >
         <div class="h-12 border-b border-gray-100 bg-white/80 backdrop-blur-sm flex items-center justify-between px-4 sticky top-0 flex-shrink-0">
           <h2 class="font-bold text-gray-700 flex items-center gap-2 text-[13px]">
             <div class="w-6 h-6 bg-violet-50 rounded-lg flex items-center justify-center">
@@ -74,12 +78,30 @@
                 v-for="(item, idx) in parentContext.items"
                 :key="item.id"
                 class="bg-white border border-gray-100 rounded-xl p-4 shadow-sm hover:shadow-md hover:border-gray-200 transition-all duration-200 group"
+                :class="getParentItemDiffClass(item.id)"
               >
                 <div class="flex items-start gap-3">
                   <span class="w-5 h-5 bg-violet-50 text-violet-500 rounded-md flex items-center justify-center text-[10px] font-black shrink-0 mt-0.5">{{ idx + 1 }}</span>
                   <div class="flex-1 min-w-0">
-                    <h3 class="font-bold text-gray-800 text-[13px] mb-1.5 truncate">{{ item.title }}</h3>
-                    <p class="text-xs text-gray-500 leading-relaxed whitespace-pre-wrap line-clamp-4">{{ item.content }}</p>
+                    <div class="flex items-center gap-2 mb-1.5">
+                      <h3 class="font-bold text-gray-800 text-[13px] truncate">{{ item.title }}</h3>
+                      <el-tag
+                        v-if="getParentItemStatus(item.id) !== 'unchanged'"
+                        size="small"
+                        :type="getParentItemStatus(item.id) === 'deleted' ? 'danger' : getParentItemStatus(item.id) === 'modified' ? 'warning' : 'success'"
+                        effect="light"
+                        class="!scale-75"
+                      >
+                        {{ getParentItemStatus(item.id) === 'deleted' ? '已删除' : getParentItemStatus(item.id) === 'modified' ? '已修改' : '新增' }}
+                      </el-tag>
+                    </div>
+                    <!-- 父版本内容：删除的文字显示删除线 -->
+                    <div class="text-xs text-gray-500 leading-relaxed whitespace-pre-wrap">
+                      <ParentDiffText
+                        :parentText="item.content || ''"
+                        :currentText="getCurrentItemContent(item.id)"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -91,7 +113,11 @@
         </div>
       </aside>
 
-      <main class="flex-1 flex flex-col relative bg-white">
+      <!-- 中栏：修订工作台 -->
+      <main
+        ref="mainPaneRef"
+        class="flex-1 flex flex-col relative bg-white"
+      >
         <div class="h-12 border-b border-gray-100 bg-white/80 backdrop-blur-sm flex items-center justify-between px-6 sticky top-0 flex-shrink-0 z-10">
           <h2 class="font-bold text-gray-800 flex items-center gap-2 text-[13px]">
             <div class="w-6 h-6 bg-blue-50 rounded-lg flex items-center justify-center">
@@ -100,8 +126,15 @@
             修订工作台
             <el-tag size="small" effect="plain" type="info" class="!text-[10px]">{{ localItems.length }} 条</el-tag>
           </h2>
-          
+
           <div class="flex items-center gap-4">
+            <!-- Diff 统计摘要 -->
+            <div v-if="diffSummary" class="flex items-center gap-2 text-[11px]">
+              <span v-if="diffSummary.newItems > 0" class="text-green-600 font-medium">+{{ diffSummary.newItems }} 新增</span>
+              <span v-if="diffSummary.modifiedItems > 0" class="text-amber-600 font-medium">~{{ diffSummary.modifiedItems }} 修改</span>
+              <span v-if="diffSummary.deletedItems > 0" class="text-red-600 font-medium">-{{ diffSummary.deletedItems }} 删除</span>
+            </div>
+
             <!-- 版本修订备注 -->
             <div class="relative" style="max-width: 400px;">
               <div class="flex items-center gap-1 cursor-pointer" @click="toggleRevisionNote" style="height: 28px;">
@@ -123,7 +156,7 @@
                 </div>
               </transition>
             </div>
-            
+
             <div class="flex items-center gap-2">
               <el-button v-if="isDirty" type="danger" link size="small" @click="handleDiscard">
                 <el-icon class="mr-1"><RefreshLeft /></el-icon>放弃修改
@@ -177,6 +210,22 @@
                   <el-button size="small" circle text type="danger" icon="Delete" @click="handleLocalDelete(item)" class="opacity-0 group-hover:opacity-100 transition-opacity"></el-button>
                 </div>
                 <div class="p-5">
+                  <!-- 内联 Diff 展示：编辑时实时显示与父版本的差异 -->
+                  <div v-if="item.parent_item_id && getItemDiff(item.parent_item_id)" class="mb-3">
+                    <div class="text-[10px] text-gray-400 mb-1 flex items-center gap-1">
+                      <el-icon size="10"><InfoFilled /></el-icon>
+                      与父版本对比
+                    </div>
+                    <div class="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap bg-gray-50 rounded-lg p-3 border border-gray-100">
+                      <TextDiff :segments="getItemDiff(item.parent_item_id)!.contentDiff" />
+                    </div>
+                  </div>
+                  <div v-else-if="item.is_new" class="mb-3">
+                    <div class="text-[10px] text-green-500 mb-1 flex items-center gap-1">
+                      <el-icon size="10"><CirclePlus /></el-icon>
+                      新增条目
+                    </div>
+                  </div>
                   <el-input
                     v-model="item.content"
                     type="textarea"
@@ -200,6 +249,7 @@
         </div>
       </main>
 
+      <!-- 右栏：当前版本评估参考 -->
       <aside
         class="border-l border-gray-100 bg-gradient-to-b from-slate-50 to-gray-50 flex flex-col z-0 transition-all duration-300 ease-in-out"
         :class="rightPaneOpen ? 'w-1/3 min-w-[320px]' : 'w-0 border-none opacity-0 overflow-hidden'"
@@ -223,13 +273,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getBaselineFullContext, type BaselineContextInfo } from '@/services/api'
+import { getBaselineFullContext, getBaselineDiff, type BaselineContextInfo, type ItemDiff, type BaselineDiffSummary } from '@/services/api'
 import EvaluationReportView from '@/components/EvaluationReportView.vue'
+import TextDiff from '@/components/TextDiff.vue'
+import ParentDiffText from '@/components/ParentDiffText.vue'
 import { useEvaluationStore } from '@/store'
-import { Notebook, CopyDocument, Warning, EditPen, DataLine, Close, Plus, Loading, Delete, ChatLineSquare, DocumentDelete, RefreshLeft, Promotion, Hide, View, ArrowDown } from '@element-plus/icons-vue'
+import { Notebook, CopyDocument, Warning, EditPen, DataLine, Close, Loading, Delete, ChatLineSquare, DocumentDelete, RefreshLeft, Promotion, Hide, View, ArrowDown, InfoFilled, CirclePlus } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -254,6 +306,17 @@ const versionDesc = ref('')
 const leftPaneTab = ref<'items'|'report'>('items')
 const rightPaneOpen = ref(true)
 const revisionNoteExpanded = ref(false)
+
+// Diff 相关状态
+const itemDiffs = ref<Map<number, ItemDiff>>(new Map())
+const diffSummary = ref<BaselineDiffSummary | null>(null)
+const diffLoading = ref(false)
+
+// 同步滚动相关
+const leftPaneRef = ref<HTMLElement | null>(null)
+const mainPaneRef = ref<HTMLElement | null>(null)
+let isLeftScrolling = false
+let isMainScrolling = false
 
 function toggleRevisionNote() {
   revisionNoteExpanded.value = !revisionNoteExpanded.value
@@ -304,13 +367,106 @@ async function loadPageData() {
     }))
     versionDesc.value = ''
 
+    // 加载 diff 数据
+    if (res.parent) {
+      await loadDiffData()
+    }
+
   } catch (e: any) {
     ElMessage.error(e.message || '加载详情失败')
   }
 }
 
+async function loadDiffData() {
+  if (!parentContext.value) return
+  diffLoading.value = true
+  try {
+    const res = await getBaselineDiff(versionId.value)
+    diffSummary.value = res.summary
+
+    // 构建 parent_item_id -> ItemDiff 映射
+    const map = new Map<number, ItemDiff>()
+    for (const item of res.items) {
+      if (item.parentItemId) {
+        map.set(item.parentItemId, item)
+      }
+    }
+    itemDiffs.value = map
+  } catch (e: any) {
+    console.warn('加载 diff 数据失败:', e)
+  } finally {
+    diffLoading.value = false
+  }
+}
+
+function getItemDiff(parentItemId: number): ItemDiff | undefined {
+  return itemDiffs.value.get(parentItemId)
+}
+
+function getParentItemStatus(parentItemId: number): string {
+  const diff = itemDiffs.value.get(parentItemId)
+  return diff?.status || 'unchanged'
+}
+
+function getParentItemDiffClass(parentItemId: number): string {
+  const status = getParentItemStatus(parentItemId)
+  switch (status) {
+    case 'deleted':
+      return 'border-red-200 bg-red-50/20'
+    case 'modified':
+      return 'border-amber-200 bg-amber-50/20'
+    case 'unchanged':
+      return ''
+    default:
+      return ''
+  }
+}
+
+function getCurrentItemContent(parentItemId: number): string {
+  const currentItem = localItems.value.find(item => item.parent_item_id === parentItemId)
+  return currentItem?.content || ''
+}
+
+// 同步滚动逻辑
+function setupSyncScroll() {
+  const leftPane = leftPaneRef.value
+  const mainPane = mainPaneRef.value
+  if (!leftPane || !mainPane) return
+
+  const onLeftScroll = () => {
+    if (isMainScrolling) return
+    isLeftScrolling = true
+    const ratio = leftPane.scrollTop / (leftPane.scrollHeight - leftPane.clientHeight)
+    mainPane.scrollTop = ratio * (mainPane.scrollHeight - mainPane.clientHeight)
+    setTimeout(() => { isLeftScrolling = false }, 50)
+  }
+
+  const onMainScroll = () => {
+    if (isLeftScrolling) return
+    isMainScrolling = true
+    const ratio = mainPane.scrollTop / (mainPane.scrollHeight - mainPane.clientHeight)
+    leftPane.scrollTop = ratio * (leftPane.scrollHeight - leftPane.clientHeight)
+    setTimeout(() => { isMainScrolling = false }, 50)
+  }
+
+  leftPane.addEventListener('scroll', onLeftScroll)
+  mainPane.addEventListener('scroll', onMainScroll)
+
+  return () => {
+    leftPane.removeEventListener('scroll', onLeftScroll)
+    mainPane.removeEventListener('scroll', onMainScroll)
+  }
+}
+
 onMounted(() => {
   loadPageData()
+  // 延迟设置同步滚动，等待 DOM 渲染完成
+  setTimeout(() => {
+    const cleanup = setupSyncScroll()
+    onUnmounted(() => {
+      if (cleanup) cleanup()
+    })
+  }, 500)
 })
 
 function goBack() {
@@ -339,12 +495,11 @@ function handleLocalDelete(item: LocalItem) {
 }
 
 function handleJumpToEvaluation() {
-  // 验证版本备注是否填写
   if (!versionDesc.value.trim()) {
     ElMessage.error('请填写版本修订备注')
     return
   }
-  
+
   evalStore.projectName = currentContext.value?.project_name || '基准修订项目'
   evalStore.requirementTitle = '修订版需求文档'
   evalStore.requirementType = 'text'
