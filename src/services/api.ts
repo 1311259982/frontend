@@ -33,6 +33,16 @@ http.interceptors.request.use((config) => {
 http.interceptors.response.use(
   (response) => response.data,
   (error) => {
+    // 处理 401 登录过期
+    if (error.response?.status === 401) {
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('auth_user');
+      // 避免重复跳转
+      if (!window.location.pathname.includes('/login')) {
+        window.location.href = '/login';
+      }
+    }
+
     const detail = error.response?.data?.detail;
     const message =
       (typeof detail === 'object' ? detail?.message : detail) ||

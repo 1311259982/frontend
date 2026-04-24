@@ -43,6 +43,7 @@ const segments = computed(() => {
   /* 确保行高固定，不受子元素 padding 影响 */
   line-height: 1.5;
   font-size: 13px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
 .diff-equal {
@@ -50,8 +51,6 @@ const segments = computed(() => {
 }
 
 .diff-delete {
-  /* 用 box-shadow 代替 background-color 实现背景，不影响行高和布局 */
-  box-shadow: 0 0 0 2px #fecaca inset;
   background-color: #fee2e2;
   color: #991b1b;
   text-decoration: line-through;
@@ -59,7 +58,6 @@ const segments = computed(() => {
 }
 
 .diff-insert {
-  box-shadow: 0 0 0 2px #bbf7d0 inset;
   background-color: #dcfce7;
   color: #166534;
   border-radius: 2px;

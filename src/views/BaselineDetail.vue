@@ -12,15 +12,6 @@
           </div>
           <div v-if="currentContext">
             <h1 class="text-base font-black text-gray-800 leading-tight tracking-tight">{{ currentContext.project_name }}</h1>
-            <div class="flex items-center gap-2 mt-0.5">
-              <el-tag size="small" effect="plain" type="primary" class="!text-[10px] !px-1.5 !py-0">{{ currentContext.version }}</el-tag>
-              <span class="text-[11px] text-gray-400">·</span>
-              <span v-if="isDirty" class="text-[11px] text-amber-500 font-bold flex items-center gap-1">
-                <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
-                草稿（已修改）
-              </span>
-              <span v-else class="text-[11px] text-gray-400">只读</span>
-            </div>
           </div>
           <div v-else class="flex items-center gap-2">
             <el-icon class="animate-spin text-blue-500"><Loading /></el-icon>
@@ -43,8 +34,10 @@
     <div class="flex-1 flex overflow-hidden">
       <!-- 左栏：父版本参考 -->
       <aside
-        ref="leftPaneRef"
-        class="w-1/3 min-w-[350px] border-r border-gray-100 bg-gradient-to-b from-slate-50 to-gray-50 flex flex-col z-0"
+        :class="[
+          'border-r border-gray-100 bg-gradient-to-b from-slate-50 to-gray-50 flex flex-col z-0 transition-all duration-300 ease-in-out',
+          rightPaneOpen ? 'w-1/3 min-w-[350px]' : 'w-1/2'
+        ]"
       >
         <div class="h-12 border-b border-gray-100 bg-white/80 backdrop-blur-sm flex items-center justify-between px-4 sticky top-0 flex-shrink-0">
           <h2 class="font-bold text-gray-700 flex items-center gap-2 text-[13px]">
@@ -71,40 +64,65 @@
             </div>
           </div>
         </div>
-        <div class="flex-1 overflow-y-auto scrollbar-thin" v-else>
+        <div ref="leftPaneRef" class="flex-1 overflow-y-auto scrollbar-thin" v-else>
           <transition name="fade" mode="out-in">
-            <div v-if="leftPaneTab === 'items'" key="items" class="p-4 space-y-3">
-              <div
-                v-for="(item, idx) in parentContext.items"
-                :key="item.id"
-                class="bg-white border border-gray-100 rounded-xl p-4 shadow-sm hover:shadow-md hover:border-gray-200 transition-all duration-200 group"
-                :class="getParentItemDiffClass(item.id)"
-              >
-                <div class="flex items-start gap-3">
-                  <span class="w-5 h-5 bg-violet-50 text-violet-500 rounded-md flex items-center justify-center text-[10px] font-black shrink-0 mt-0.5">{{ idx + 1 }}</span>
-                  <div class="flex-1 min-w-0">
-                    <div class="flex items-center gap-2 mb-1.5">
-                      <h3 class="font-bold text-gray-800 text-[13px] truncate">{{ item.title }}</h3>
-                      <el-tag
-                        v-if="getParentItemStatus(item.id) !== 'unchanged'"
-                        size="small"
-                        :type="getParentItemStatus(item.id) === 'deleted' ? 'danger' : getParentItemStatus(item.id) === 'modified' ? 'warning' : 'success'"
-                        effect="light"
-                        class="!scale-75"
-                      >
-                        {{ getParentItemStatus(item.id) === 'deleted' ? '已删除' : getParentItemStatus(item.id) === 'modified' ? '已修改' : '新增' }}
-                      </el-tag>
+            <div v-if="leftPaneTab === 'items'" key="items" class="p-6 space-y-4">
+              <template v-for="(row, ridx) in alignedRows" :key="'left-' + ridx">
+                <!-- 有父版本条目：显示卡片 -->
+                <div
+                  v-if="row.parent"
+                  :ref="el => setCardRef(el, 'parent', row.parent.id)"
+                  :class="[
+                    'bg-white border rounded-2xl shadow-sm transition-all duration-200 overflow-hidden group',
+                    getParentItemStatus(row.parent.id) === 'deleted' ? 'border-red-100 shadow-red-50' : 'border-gray-100 hover:border-gray-200 hover:shadow-md'
+                  ]"
+                >
+                  <!-- 卡片页眉 -->
+                  <div 
+                    class="px-5 py-3 border-b flex items-center justify-between transition-colors bg-gray-50/50 border-gray-50 cursor-pointer"
+                    @click="toggleItemExpansionByRow(ridx)"
+                  >
+                    <div class="flex items-center gap-4 flex-1">
+                      <el-icon class="text-gray-400 transition-transform" :class="{ 'rotate-180': isExpanded(ridx) }"><ArrowDown /></el-icon>
+                      <div class="w-6 h-6 rounded-lg flex items-center justify-center text-[11px] font-bold shadow-sm shrink-0 bg-violet-600 text-white shadow-violet-200">
+                        {{ row.pIdx + 1 }}
+                      </div>
+                      <span class="text-sm font-bold text-slate-800 tracking-tight truncate max-w-[300px]">
+                        {{ row.parent.title }}
+                      </span>
+                      <transition name="fade">
+                        <div class="flex items-center gap-1.5 ml-2">
+                          <div v-if="getParentItemStatus(row.parent.id) === 'deleted'" 
+                            class="flex items-center gap-1 px-2 py-0.5 bg-red-50 text-red-600 border border-red-200 rounded-full text-[10px] font-bold">
+                            <el-icon><DocumentDelete /></el-icon>
+                            <span>已删除</span>
+                          </div>
+                          <div v-else-if="getParentItemStatus(row.parent.id) === 'modified'" 
+                            class="flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-600 border border-amber-200 rounded-full text-[10px] font-bold">
+                            <el-icon><InfoFilled /></el-icon>
+                            <span>已修改</span>
+                          </div>
+                        </div>
+                      </transition>
                     </div>
-                    <!-- 父版本内容：删除的文字显示删除线 -->
-                    <div class="text-xs text-gray-500 leading-relaxed whitespace-pre-wrap">
+                  </div>
+
+                  <!-- 卡片内容 -->
+                  <div class="p-5" v-show="isExpanded(ridx)">
+                    <div
+                      class="bg-[#f8fafc] rounded-xl border border-transparent text-[13px]"
+                      style="padding: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; box-sizing: border-box; color: #334155; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;"
+                    >
                       <ParentDiffText
-                        :parentText="item.content || ''"
-                        :currentText="getCurrentItemContent(item.id)"
+                        :parentText="row.parent.content || ''"
+                        :currentText="getCurrentItemContent(row.parent.id, row.parent.title)"
                       />
                     </div>
                   </div>
                 </div>
-              </div>
+                <!-- 无父版本条目（对应右侧新增）：显示占位符 -->
+                <div v-else :style="{ height: getRowHeight(ridx, 'current') + 'px' }" class="border border-transparent"></div>
+              </template>
             </div>
             <div v-else key="report" class="h-full">
               <EvaluationReportView :report="parentContext.evaluation_report" />
@@ -115,8 +133,10 @@
 
       <!-- 中栏：修订工作台 -->
       <main
-        ref="mainPaneRef"
-        class="flex-1 flex flex-col relative bg-white"
+        :class="[
+          'flex flex-col relative bg-white transition-all duration-300 ease-in-out',
+          rightPaneOpen ? 'w-1/3' : 'w-1/2'
+        ]"
       >
         <div class="h-12 border-b border-gray-100 bg-white/80 backdrop-blur-sm flex items-center justify-between px-6 sticky top-0 flex-shrink-0 z-10">
           <h2 class="font-bold text-gray-800 flex items-center gap-2 text-[13px]">
@@ -124,7 +144,7 @@
               <el-icon class="text-blue-500" size="14"><EditPen /></el-icon>
             </div>
             修订工作台
-            <el-tag size="small" effect="plain" type="info" class="!text-[10px]">{{ localItems.length }} 条</el-tag>
+            <el-tag size="small" type="info" effect="plain" v-if="currentContext" class="!text-[10px]">{{ currentContext.version }}</el-tag>
           </h2>
 
           <div class="flex items-center gap-4">
@@ -133,28 +153,6 @@
               <span v-if="diffSummary.newItems > 0" class="text-green-600 font-medium">+{{ diffSummary.newItems }} 新增</span>
               <span v-if="diffSummary.modifiedItems > 0" class="text-amber-600 font-medium">~{{ diffSummary.modifiedItems }} 修改</span>
               <span v-if="diffSummary.deletedItems > 0" class="text-red-600 font-medium">-{{ diffSummary.deletedItems }} 删除</span>
-            </div>
-
-            <!-- 版本修订备注 -->
-            <div class="relative" style="max-width: 400px;">
-              <div class="flex items-center gap-1 cursor-pointer" @click="toggleRevisionNote" style="height: 28px;">
-                <div class="w-5 h-5 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <el-icon size="11" class="text-blue-600"><ChatLineSquare /></el-icon>
-                </div>
-                <span class="font-bold text-blue-700 text-[11px]">版本修订备注</span>
-                <el-icon :class="{ 'rotate-180': revisionNoteExpanded }" class="ml-1 transition-transform duration-300 text-blue-500"><ArrowDown /></el-icon>
-              </div>
-              <transition name="fade">
-                <div v-if="revisionNoteExpanded" class="absolute top-full right-0 mt-1 w-96 bg-white border border-gray-200 rounded-lg shadow-md p-3 z-50">
-                  <el-input
-                    v-model="versionDesc"
-                    type="textarea"
-                    :rows="3"
-                    placeholder="请记录本次版本的修改目标或修订点（如：修复了可测试性评分中提到的语义模糊问题）..."
-                    class="revision-input"
-                  />
-                </div>
-              </transition>
             </div>
 
             <div class="flex items-center gap-2">
@@ -174,77 +172,72 @@
           </div>
         </div>
 
-        <div class="flex-1 overflow-y-auto p-8 bg-gradient-to-b from-white to-slate-50/50 scrollbar-thin">
-          <div class="max-w-4xl mx-auto space-y-6">
+        <div ref="mainPaneRef" class="flex-1 overflow-y-auto p-6 bg-gradient-to-b from-white to-slate-50/50 scrollbar-thin">
 
-            <div class="flex items-center gap-3 py-3">
-              <div class="h-px flex-1 bg-gray-200"></div>
-              <span class="text-[11px] text-gray-400 uppercase font-black tracking-widest">需求条目修订区</span>
-              <div class="h-px flex-1 bg-gray-200"></div>
-            </div>
-
-            <TransitionGroup name="list" tag="div" class="space-y-4 pb-20">
+          <div class="space-y-4 pb-20">
+            <template v-for="(row, ridx) in alignedRows" :key="'main-' + ridx">
+              <!-- 有当前版本条目：显示卡片 -->
               <div
-                v-for="(item, idx) in localItems"
-                :key="item.id || item._localId"
+                v-if="row.current"
+                :ref="el => setCardRef(el, 'current', row.current.id || row.current._localId)"
                 :class="[
                   'bg-white border rounded-2xl shadow-sm transition-all duration-200 overflow-hidden group',
-                  item._isDirty
+                  row.current._isDirty
                     ? 'border-amber-200 shadow-amber-100/50 hover:shadow-amber-200/50'
                     : 'border-gray-100 hover:border-gray-200 hover:shadow-md'
                 ]"
               >
-                <div class="px-5 py-3 border-b flex items-center justify-between" :class="item._isDirty ? 'bg-amber-50/50 border-amber-100' : 'bg-gray-50/30 border-gray-50'">
+                <div class="px-5 py-3 border-b flex items-center justify-between transition-colors cursor-pointer" 
+                  :class="row.current._isDirty ? 'bg-amber-50/50 border-amber-100' : 'bg-gray-50/50 border-gray-50'"
+                  @click="toggleItemExpansionByRow(ridx)"
+                >
                   <div class="flex items-center gap-3 flex-1">
-                    <span class="w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-black shrink-0"
-                      :class="item._isDirty ? 'bg-amber-100 text-amber-600' : 'bg-gray-100 text-gray-400'">
-                      {{ idx + 1 }}
+                    <el-icon class="text-gray-400 transition-transform" :class="{ 'rotate-180': isExpanded(ridx) }"><ArrowDown /></el-icon>
+                    <!-- 序列号徽章 -->
+                    <div class="w-6 h-6 rounded-lg flex items-center justify-center text-[11px] font-bold shadow-sm shrink-0 transition-colors"
+                      :class="row.current._isDirty ? 'bg-amber-500 text-white shadow-amber-200' : 'bg-blue-600 text-white shadow-blue-200'">
+                      {{ row.cIdx + 1 }}
+                    </div>
+                    
+                    <!-- 需求标题 -->
+                    <span class="text-sm font-bold text-slate-800 tracking-tight truncate max-w-[400px]">
+                      {{ row.current.title }}
                     </span>
-                    <el-input v-model="item.title" placeholder="需求标题" size="small" class="max-w-[300px] !font-bold" disabled @change="markDirty(item)"/>
+
                     <transition name="fade">
-                      <el-tag v-if="item._isDirty" size="small" type="warning" effect="light" class="!scale-90">
-                        <el-icon class="mr-0.5"><EditPen /></el-icon>有改动
-                      </el-tag>
+                      <div class="flex items-center gap-1.5 ml-2">
+                        <el-tag v-if="getItemStatusTag(row.current) === 'modified'" size="small" type="warning" effect="light" class="!scale-90">
+                          <el-icon class="mr-0.5"><EditPen /></el-icon>已修改
+                        </el-tag>
+                        <el-tag v-else-if="getItemStatusTag(row.current) === 'added'" size="small" type="success" effect="light" class="!scale-90">
+                          <el-icon class="mr-0.5"><CirclePlus /></el-icon>新增条目
+                        </el-tag>
+                      </div>
                     </transition>
                   </div>
-                  <el-button size="small" circle text type="danger" icon="Delete" @click="handleLocalDelete(item)" class="opacity-0 group-hover:opacity-100 transition-opacity"></el-button>
+                  <el-button size="small" circle text type="danger" icon="Delete" @click.stop="handleLocalDelete(row.current)" class="opacity-0 group-hover:opacity-100 transition-opacity"></el-button>
                 </div>
-                <div class="p-5">
-                  <!-- 内联 Diff 展示：编辑时实时显示与父版本的差异 -->
-                  <div v-if="item.parent_item_id && getItemDiff(item.parent_item_id)" class="mb-3">
-                    <div class="text-[10px] text-gray-400 mb-1 flex items-center gap-1">
-                      <el-icon size="10"><InfoFilled /></el-icon>
-                      与父版本对比
-                    </div>
-                    <div class="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap bg-gray-50 rounded-lg p-3 border border-gray-100">
-                      <TextDiff :segments="getItemDiff(item.parent_item_id)!.contentDiff" />
-                    </div>
-                  </div>
-                  <div v-else-if="item.is_new" class="mb-3">
-                    <div class="text-[10px] text-green-500 mb-1 flex items-center gap-1">
-                      <el-icon size="10"><CirclePlus /></el-icon>
-                      新增条目
-                    </div>
-                  </div>
-                  <el-input
-                    v-model="item.content"
-                    type="textarea"
-                    autosize
-                    placeholder="需求内容..."
-                    class="text-sm font-sans revision-content"
-                    @input="markDirty(item)"
+                
+                <div class="p-5" v-show="isExpanded(ridx)">
+                  <LiveDiffEditor
+                    v-model="row.current.content"
+                    :originalValue="getParentItemContent(row.current.parent_item_id, row.current.title)"
+                    :expanded="true"
+                    @update:modelValue="markDirty(row.current)"
                   />
                 </div>
               </div>
-            </TransitionGroup>
+              <!-- 无当前版本条目（对应左侧已删除）：显示占位符 -->
+              <div v-else :style="{ height: getRowHeight(ridx, 'parent') + 'px' }" class="border border-transparent"></div>
+            </template>
+          </div>
 
-            <div v-if="localItems.length === 0" class="py-20 text-center">
-              <div class="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                <el-icon size="28" class="text-gray-300"><DocumentDelete /></el-icon>
-              </div>
-              <p class="text-gray-400 font-medium">内容已被清空</p>
-              <p class="text-xs text-gray-300 mt-1">所有需求条目已移除</p>
+          <div v-if="localItems.length === 0" class="py-20 text-center">
+            <div class="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <el-icon size="28" class="text-gray-300"><DocumentDelete /></el-icon>
             </div>
+            <p class="text-gray-400 font-medium">内容已被清空</p>
+            <p class="text-xs text-gray-300 mt-1">所有需求条目已移除</p>
           </div>
         </div>
       </main>
@@ -278,10 +271,10 @@ import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getBaselineFullContext, getBaselineDiff, type BaselineContextInfo, type ItemDiff, type BaselineDiffSummary } from '@/services/api'
 import EvaluationReportView from '@/components/EvaluationReportView.vue'
-import TextDiff from '@/components/TextDiff.vue'
 import ParentDiffText from '@/components/ParentDiffText.vue'
+import LiveDiffEditor from '@/components/LiveDiffEditor.vue'
 import { useEvaluationStore } from '@/store'
-import { Notebook, CopyDocument, Warning, EditPen, DataLine, Close, Loading, Delete, ChatLineSquare, DocumentDelete, RefreshLeft, Promotion, Hide, View, ArrowDown, InfoFilled, CirclePlus } from '@element-plus/icons-vue'
+import { Notebook, CopyDocument, Warning, EditPen, DataLine, Close, Loading, Delete, ChatLineSquare, DocumentDelete, RefreshLeft, Promotion, Hide, View, ArrowDown, InfoFilled, CirclePlus, DocumentCopy } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -290,6 +283,18 @@ const versionId = computed(() => Number(route.params.versionId))
 
 const currentContext = ref<BaselineContextInfo | null>(null)
 const parentContext = ref<BaselineContextInfo | null>(null)
+
+// 展开状态管理
+const expandedItems = ref(new Set<number>())
+function isExpanded(idx: number) {
+  return expandedItems.value.has(idx)
+}
+function toggleItemExpansion(idx: number) {
+  const next = new Set(expandedItems.value)
+  if (next.has(idx)) next.delete(idx)
+  else next.add(idx)
+  expandedItems.value = next // 强制触发响应式
+}
 
 interface LocalItem {
   id?: number
@@ -367,7 +372,9 @@ async function loadPageData() {
     }))
     versionDesc.value = ''
 
-    // 加载 diff 数据
+    // 默认展开所有项
+    expandedItems.value = new Set(localItems.value.map((_, i) => i))
+
     if (res.parent) {
       await loadDiffData()
     }
@@ -384,7 +391,6 @@ async function loadDiffData() {
     const res = await getBaselineDiff(versionId.value)
     diffSummary.value = res.summary
 
-    // 构建 parent_item_id -> ItemDiff 映射
     const map = new Map<number, ItemDiff>()
     for (const item of res.items) {
       if (item.parentItemId) {
@@ -408,23 +414,111 @@ function getParentItemStatus(parentItemId: number): string {
   return diff?.status || 'unchanged'
 }
 
-function getParentItemDiffClass(parentItemId: number): string {
-  const status = getParentItemStatus(parentItemId)
-  switch (status) {
-    case 'deleted':
-      return 'border-red-200 bg-red-50/20'
-    case 'modified':
-      return 'border-amber-200 bg-amber-50/20'
-    case 'unchanged':
-      return ''
-    default:
-      return ''
+function getParentItemContent(parentItemId: number | null | undefined, title: string): string {
+  if (!parentContext.value) return ''
+  let parentItem = null
+  if (parentItemId) {
+    parentItem = parentContext.value.items.find(i => i.id === parentItemId)
+  }
+  // 容错：如果 parent_item_id 错误（跨版本），则尝试通过 title 匹配
+  if (!parentItem && title) {
+    parentItem = parentContext.value.items.find(i => i.title === title)
+  }
+  return parentItem?.content || ''
+}
+
+function getCurrentItemContent(parentItemId: number, title: string): string {
+  let currentItem = localItems.value.find(item => item.parent_item_id === parentItemId)
+  if (!currentItem && title) {
+    currentItem = localItems.value.find(item => item.title === title)
+  }
+  return currentItem?.content || ''
+}
+
+// 复杂的对齐行逻辑
+const alignedRows = computed(() => {
+  if (!parentContext.value) {
+    return localItems.value.map((item, idx) => ({ 
+      parent: null, current: item, pIdx: -1, cIdx: idx 
+    }))
+  }
+
+  const rows: any[] = []
+  const currentItems = [...localItems.value]
+  const parentItems = [...parentContext.value.items]
+  const usedCurrentIndices = new Set<number>()
+
+  // 1. 遍历父版本，寻找匹配项
+  parentItems.forEach((pItem, pIdx) => {
+    const cIdx = currentItems.findIndex((c, idx) => {
+      if (usedCurrentIndices.has(idx)) return false
+      // 匹配逻辑：ID 匹配 或 标题匹配（容错）
+      return (c.parent_item_id === pItem.id) || (!c.parent_item_id && c.title === pItem.title)
+    })
+
+    if (cIdx !== -1) {
+      rows.push({ parent: pItem, current: currentItems[cIdx], pIdx, cIdx })
+      usedCurrentIndices.add(cIdx)
+    } else {
+      // 被删除了
+      rows.push({ parent: pItem, current: null, pIdx, cIdx: -1 })
+    }
+  })
+
+  // 2. 剩下的就是纯新增的
+  currentItems.forEach((cItem, cIdx) => {
+    if (!usedCurrentIndices.has(cIdx)) {
+      rows.push({ parent: null, current: cItem, pIdx: -1, cIdx })
+    }
+  })
+
+  return rows
+})
+
+// 高度监测与同步
+const rowHeights = ref<Record<string, number>>({})
+let resizeObserver: ResizeObserver | null = null
+
+function setCardRef(el: any, type: 'parent' | 'current', id: any) {
+  if (el && id) {
+    const key = `${type}-${id}`
+    // 使用 ResizeObserver 监听高度
+    if (!resizeObserver) {
+      resizeObserver = new ResizeObserver((entries) => {
+        entries.forEach(entry => {
+          const targetKey = (entry.target as any).dataset.key
+          if (targetKey) {
+            rowHeights.value[targetKey] = entry.contentRect.height + 1 // +1 for border
+          }
+        })
+      })
+    }
+    el.dataset.key = key
+    resizeObserver.observe(el)
   }
 }
 
-function getCurrentItemContent(parentItemId: number): string {
-  const currentItem = localItems.value.find(item => item.parent_item_id === parentItemId)
-  return currentItem?.content || ''
+function getRowHeight(ridx: number, otherType: 'parent' | 'current') {
+  const row = alignedRows.value[ridx]
+  const otherItem = row[otherType]
+  if (!otherItem) return 0
+  const otherId = otherItem.id || otherItem._localId
+  return rowHeights.value[`${otherType}-${otherId}`] || 100
+}
+
+function toggleItemExpansionByRow(ridx: number) {
+  toggleItemExpansion(ridx)
+}
+
+function getItemStatusTag(item: LocalItem) {
+  if (item._isDirty) return 'modified'
+  
+  const originalContent = getParentItemContent(item.parent_item_id, item.title)
+  const existsInParent = !!parentContext.value?.items.find(i => i.id === item.parent_item_id || i.title === item.title)
+  
+  if (!existsInParent) return 'added'
+  if (item.content !== originalContent) return 'modified'
+  return 'unchanged'
 }
 
 // 同步滚动逻辑
@@ -436,16 +530,14 @@ function setupSyncScroll() {
   const onLeftScroll = () => {
     if (isMainScrolling) return
     isLeftScrolling = true
-    const ratio = leftPane.scrollTop / (leftPane.scrollHeight - leftPane.clientHeight)
-    mainPane.scrollTop = ratio * (mainPane.scrollHeight - mainPane.clientHeight)
+    mainPane.scrollTop = leftPane.scrollTop
     setTimeout(() => { isLeftScrolling = false }, 50)
   }
 
   const onMainScroll = () => {
     if (isLeftScrolling) return
     isMainScrolling = true
-    const ratio = mainPane.scrollTop / (mainPane.scrollHeight - mainPane.clientHeight)
-    leftPane.scrollTop = ratio * (leftPane.scrollHeight - leftPane.clientHeight)
+    leftPane.scrollTop = mainPane.scrollTop
     setTimeout(() => { isMainScrolling = false }, 50)
   }
 
@@ -455,12 +547,12 @@ function setupSyncScroll() {
   return () => {
     leftPane.removeEventListener('scroll', onLeftScroll)
     mainPane.removeEventListener('scroll', onMainScroll)
+    if (resizeObserver) resizeObserver.disconnect()
   }
 }
 
 onMounted(() => {
   loadPageData()
-  // 延迟设置同步滚动，等待 DOM 渲染完成
   setTimeout(() => {
     const cleanup = setupSyncScroll()
     onUnmounted(() => {
@@ -495,18 +587,13 @@ function handleLocalDelete(item: LocalItem) {
 }
 
 function handleJumpToEvaluation() {
-  if (!versionDesc.value.trim()) {
-    ElMessage.error('请填写版本修订备注')
-    return
-  }
-
   evalStore.projectName = currentContext.value?.project_name || '基准修订项目'
   evalStore.requirementTitle = '修订版需求文档'
   evalStore.requirementType = 'text'
-  evalStore.versionDesc = versionDesc.value
+  evalStore.versionDesc = '' // 这里置空，交给评估页面处理
 
   evalStore.items = localItems.value.map(i => ({
-    parent_item_id: i.parent_item_id || i.id || null,
+    parent_item_id: i.id || null,
     title: i.title,
     content: i.content,
     status: i._isDirty ? 'modified' : 'unchanged'
@@ -543,7 +630,7 @@ function handleJumpToEvaluation() {
 .revision-input :deep(.el-textarea__inner) {
   border: 1px solid #e2e8f0 !important;
   box-shadow: none !important;
-  font-family: inherit;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   font-size: 13px;
   line-height: 1.7;
   padding: 8px 12px !important;
@@ -551,14 +638,8 @@ function handleJumpToEvaluation() {
   border-radius: 8px;
 }
 
-.revision-content :deep(.el-textarea__inner) {
-  border: 1px solid #e2e8f0 !important;
-  box-shadow: none !important;
-  background: white !important;
-  padding: 8px 12px !important;
-  font-size: 13px;
-  line-height: 1.7;
-  border-radius: 8px;
+.ParentDiffText, .baseline-content-wrapper {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
 .scrollbar-thin::-webkit-scrollbar {
@@ -570,12 +651,5 @@ function handleJumpToEvaluation() {
 }
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background: #cbd5e1;
-}
-
-.line-clamp-4 {
-  display: -webkit-box;
-  -webkit-line-clamp: 4;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 </style>

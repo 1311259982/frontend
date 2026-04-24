@@ -236,33 +236,7 @@
             </div>
           </section>
 
-          <!-- User Defined Smell Categories -->
-          <section>
-            <h3 class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-              <el-icon><User /></el-icon> 用户自定义异味分组
-            </h3>
-            <div class="flex gap-4 overflow-x-auto pb-2">
-              <el-card 
-                v-for="cat in smellStore.userCategories" 
-                :key="cat.id"
-                class="min-w-[220px] border-none shadow-sm rounded-xl cursor-pointer hover:shadow-md transition-all"
-                :class="{'ring-2 ring-orange-500': selectedSmellCategory === cat.id}"
-                @click="selectedSmellCategory = cat.id"
-              >
-                <div class="flex justify-between items-center">
-                  <span class="font-bold text-gray-700">{{ cat.name }}</span>
-                  <el-button size="small" link type="danger" icon="Delete" @click.stop="handleRemoveSmellCategory(cat.id)"></el-button>
-                </div>
-                <p class="text-xs text-gray-400 mt-1">
-                  {{ cat.files.length }} 条规则 | 
-                  <span class="text-red-400">{{ cat.files.filter((f: any) => f.priority === 'high').length }}高</span>
-                  <span class="text-yellow-400">{{ cat.files.filter((f: any) => f.priority === 'medium').length }}中</span>
-                  <span class="text-green-400">{{ cat.files.filter((f: any) => f.priority === 'low').length }}低</span>
-                </p>
-              </el-card>
-              <el-button class="min-w-[120px] rounded-xl border-dashed" icon="Plus" @click="openAddCategory('user')">添加用户分类</el-button>
-            </div>
-          </section>
+
 
           <!-- Smell Rules File List -->
           <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -363,7 +337,6 @@
           <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <div class="p-4 border-b border-gray-100 flex justify-between items-center">
               <h3 class="font-bold text-gray-700">基准文档列表 - {{ currentBaselineCategoryName }}</h3>
-              <el-button type="primary" size="small" icon="Upload">上传基准模板</el-button>
             </div>
             <el-table :data="currentBaselineFiles" style="width: 100%" class="custom-table">
               <el-table-column label="需求文档名称" min-width="200">

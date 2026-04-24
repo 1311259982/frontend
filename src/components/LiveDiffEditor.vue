@@ -125,7 +125,6 @@ const onInput = (e: Event) => {
 
 /* ---- 展示模式（核心：与左侧保持完全一致的盒模型）---- */
 .display-view {
-  /* 与左侧 ParentDiffText 包装 div 完全相同 */
   background-color: #f8fafc;
   border-radius: 12px;
   padding: 12px;
@@ -137,6 +136,9 @@ const onInput = (e: Event) => {
   cursor: text;
   border: 1px solid transparent;
   transition: border-color 0.15s, background-color 0.15s;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  letter-spacing: normal;
+  font-variant-ligatures: none;
 }
 
 .display-view:hover {
@@ -144,25 +146,27 @@ const onInput = (e: Event) => {
   background-color: white;
 }
 
-/* ---- 编辑模式（核心：padding 完全等于展示模式，box-sizing 必须一致）---- */
+/* ---- 编辑模式（核心：盒模型必须与展示模式绝对一致）---- */
 .editor-textarea {
   display: block;
   width: 100%;
-  /* 用 box-sizing: border-box，border(1px)*2 + padding(12px)*2 = 总宽度不变 */
   box-sizing: border-box;
-  /* 内容 padding = 展示模式 padding(12px) - border(1px) = 11px，确保内容区等宽 */
-  padding: 11px;
+  padding: 12px;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
   font-size: 13px;
   line-height: 1.5;
   color: #334155;
-  font-family: inherit;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   background-color: white;
   resize: none;
   overflow: hidden;
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s;
+  white-space: pre-wrap;
+  word-break: break-word;
+  letter-spacing: normal;
+  font-variant-ligatures: none;
 }
 
 .editor-textarea:focus {

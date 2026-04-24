@@ -239,7 +239,7 @@ export const useKnowledgeStore = defineStore('knowledge', {
     async fetchStandards() {
       if (this.isLoaded) return;
       try {
-        const standards = await getStandards();
+        const standards = await getStandards('standard');
         if (standards && standards.length > 0) {
           this.categories = standards;
         }
