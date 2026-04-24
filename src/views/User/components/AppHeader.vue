@@ -37,16 +37,18 @@
 </template>
 
 <script setup lang="ts">
-import { useAuthStore, useEvaluationStore } from '@/store';
+import { useAuthStore, useEvaluationStore, useModelStore } from '@/store';
 import { useRouter } from 'vue-router';
 import { Monitor, ArrowDown } from '@element-plus/icons-vue';
 
 const authStore = useAuthStore();
 const evalStore = useEvaluationStore();
+const modelStore = useModelStore();
 const router = useRouter();
 
 const handleLogout = () => {
   authStore.logout();
+  modelStore.resetCacheStatus();
   router.push('/login');
 };
 </script>

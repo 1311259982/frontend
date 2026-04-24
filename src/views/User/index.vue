@@ -123,6 +123,11 @@ onMounted(async () => {
     evalStore.fetchHistory().catch(() => {})
   ]);
 
+  // 模型列表加载完成后，检查 LLM 缓存状态（触发后端预热）
+  if (modelStore.isLoaded) {
+    await modelStore.checkCacheStatus().catch(() => {});
+  }
+
   if (evalStore.isAutoStart) {
     console.log('[User] Detected Auto-Start from Revision flow. Navigating to Config Step...');
     evalStore.isAutoStart = false;

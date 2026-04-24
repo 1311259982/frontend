@@ -411,6 +411,14 @@ export const deleteModel = (id: number): Promise<void> => {
   return http.delete(`/api/admin/models/${id}`);
 };
 
+/**
+ * 获取 LLM 缓存状态（为空时自动触发预热）
+ * GET /api/admin/models/cache-status
+ */
+export const getModelCacheStatus = (): Promise<any> => {
+  return http.get('/api/admin/models/cache-status');
+};
+
 // ─────────────────────────────────────────────
 // 基线积木块 (Baseline Items) API
 // ─────────────────────────────────────────────

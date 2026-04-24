@@ -199,19 +199,23 @@
         </el-form-item>
 
         <el-form-item label="模型选择">
-          <el-select 
-            v-model="localSettings.selectedModelId" 
+          <el-select
+            v-model="localSettings.selectedModelId"
             class="w-full"
-            v-loading="modelStore.isLoading"
-            placeholder="正在同步配置..."
+            :disabled="!modelStore.isCacheReady"
+            :placeholder="modelStore.isCacheReady ? '请选择模型' : '模型加载中...'"
           >
-            <el-option 
-              v-for="model in availableModels" 
-              :key="model.id" 
-              :label="model.name" 
-              :value="model.id" 
+            <el-option
+              v-for="model in availableModels"
+              :key="model.id"
+              :label="model.name"
+              :value="model.id"
             />
           </el-select>
+          <div v-if="!modelStore.isCacheReady" class="text-xs text-gray-400 mt-1 flex items-center gap-1">
+            <el-icon class="animate-spin"><Loading /></el-icon>
+            <span>正在初始化模型实例，请稍候...</span>
+          </div>
         </el-form-item>
       </div>
 
@@ -377,7 +381,7 @@ import { ref, computed, watch, reactive, onBeforeUnmount } from 'vue';
 import { useEvaluationStore, useBaselineStore, useModelStore } from '@/store';
 import { uploadRequirementFile } from '@/services';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { Plus, Connection, View, Close, Document, Delete, UploadFilled, ChatLineRound, DocumentCopy, DocumentAdd, Warning, ArrowRight, ArrowDown } from '@element-plus/icons-vue';
+import { Plus, Connection, View, Close, Document, Delete, UploadFilled, ChatLineRound, DocumentCopy, DocumentAdd, Warning, ArrowRight, ArrowDown, Loading } from '@element-plus/icons-vue';
 
 const props = defineProps<{ settings: { depth: number; selectedModelId: number | null } }>();
 const emit = defineEmits(['update:settings', 'openBaselineDrawer', 'previewFile']);

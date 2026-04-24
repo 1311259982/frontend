@@ -62,15 +62,16 @@ export const useAuthStore = defineStore('auth', {
 // ─────────────────────────────────────────────
 // Model Store
 // ─────────────────────────────────────────────
-import { getModels, createModel, updateModel, activateModel, deleteModel } from '../services/api';
+import { getModels, createModel, updateModel, activateModel, deleteModel, getModelCacheStatus } from '../services/api';
 
 export const useModelStore = defineStore('models', {
   state: () => ({
     models: [] as any[],
-    defaultModel: 'GPT-4o', 
+    defaultModel: 'GPT-4o',
     defaultModelId: null as number | null,
     isLoading: false,
     isLoaded: false,
+    isCacheReady: false,
     prompts: {
       system: '你是一个专业的软件需求测试性评估专家。请根据提供的知识库标准，对需求文档进行评估。',
       format: '评估报告应包含：1. 可测试性评分 (0-100)；2. 问题点分析；3. 改进建议。',
@@ -86,10 +87,10 @@ export const useModelStore = defineStore('models', {
         this.models = data.map((item: any) => ({
           ...item,
           status: item.is_active ? 'active' : 'available',
-          apiKey: item.api_key, 
+          apiKey: item.api_key,
           baseUrl: item.base_url,
         }));
-        
+
         // 关键逻辑：寻找后端标记为 is_active 的项并同步到前端默认模型
         const activeItem = data.find((m: any) => m.is_active);
         if (activeItem) {
@@ -103,6 +104,19 @@ export const useModelStore = defineStore('models', {
       } finally {
         this.isLoading = false;
       }
+    },
+    async checkCacheStatus() {
+      try {
+        const status = await getModelCacheStatus();
+        this.isCacheReady = status.is_ready === true;
+        console.log('[ModelStore] Cache status:', status);
+      } catch (error) {
+        console.error('Failed to check model cache status:', error);
+        this.isCacheReady = false;
+      }
+    },
+    resetCacheStatus() {
+      this.isCacheReady = false;
     },
     async addModel(model: any) {
       try {
