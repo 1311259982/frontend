@@ -7,7 +7,7 @@ import {
   createCategory, deleteCategory, deleteStandardFile, seedData,
   updateStandardStatus, updateStandardPriority, uploadRequirementFile,
   deleteUpload, getBaselineItems,
-  createDraft, syncDraftItems
+  createDraft, syncDraftItems, getPrompts, updatePrompt
 } from '@/services';
 
 // ─────────────────────────────────────────────
@@ -82,17 +82,30 @@ export const useModelStore = defineStore('models', {
       if (this.isLoading) return;
       this.isLoading = true;
       try {
-        const data = await getModels();
+        const [modelsData, promptsData] = await Promise.all([
+          getModels(),
+          getPrompts()
+        ]);
+        
         // 映射后端字段到前端现有的使用习惯
-        this.models = data.map((item: any) => ({
+        this.models = modelsData.map((item: any) => ({
           ...item,
           status: item.is_active ? 'active' : 'available',
           apiKey: item.api_key,
           baseUrl: item.base_url,
         }));
 
+        // 同步提示词
+        if (promptsData && promptsData.length > 0) {
+          promptsData.forEach((p: any) => {
+            if (p.name === 'system' || p.name === 'format') {
+              this.prompts[p.name as 'system' | 'format'] = p.content;
+            }
+          });
+        }
+
         // 关键逻辑：寻找后端标记为 is_active 的项并同步到前端默认模型
-        const activeItem = data.find((m: any) => m.is_active);
+        const activeItem = modelsData.find((m: any) => m.is_active);
         if (activeItem) {
           this.defaultModel = activeItem.name;
           this.defaultModelId = activeItem.id;
@@ -100,9 +113,33 @@ export const useModelStore = defineStore('models', {
         }
         this.isLoaded = true;
       } catch (error) {
-        console.error('Failed to fetch models:', error);
+        console.error('Failed to fetch models or prompts:', error);
       } finally {
         this.isLoading = false;
+      }
+    },
+    async fetchPrompts() {
+      try {
+        const data = await getPrompts();
+        if (data && data.length > 0) {
+          data.forEach((p: any) => {
+            if (p.name === 'system' || p.name === 'format') {
+              this.prompts[p.name as 'system' | 'format'] = p.content;
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Failed to fetch prompts:', error);
+      }
+    },
+    async savePrompt(type: 'system' | 'format') {
+      try {
+        const content = this.prompts[type];
+        await updatePrompt(type, content);
+        console.log(`[ModelStore] Saved ${type} prompt to backend.`);
+      } catch (error) {
+        console.error(`Failed to save ${type} prompt:`, error);
+        throw error;
       }
     },
     async checkCacheStatus() {

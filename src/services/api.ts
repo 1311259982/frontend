@@ -430,6 +430,18 @@ export const getModelCacheStatus = (): Promise<any> => {
 };
 
 // ─────────────────────────────────────────────
+// 提示词配置 API
+// ─────────────────────────────────────────────
+
+export const getPrompts = (): Promise<any[]> => {
+  return http.get('/api/prompts');
+};
+
+export const updatePrompt = (name: string, content: string): Promise<any> => {
+  return http.put(`/api/prompts/${name}`, { content });
+};
+
+// ─────────────────────────────────────────────
 // 基线积木块 (Baseline Items) API
 // ─────────────────────────────────────────────
 

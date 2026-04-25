@@ -54,6 +54,8 @@ export const {
     syncDraftItems,
     submitDraft,
     deleteEvaluation,
+    getPrompts,
+    updatePrompt,
 } = service;
 
 // 仅 mock 有的额外函数（不影响 api 模式）

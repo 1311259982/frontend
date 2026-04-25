@@ -828,8 +828,13 @@ const handleRemoveModel = async (id: number) => {
   }
 };
 
-const savePrompt = (type: 'system' | 'format') => {
-  ElMessage.success('配置已保存');
+const savePrompt = async (type: 'system' | 'format') => {
+  try {
+    await modelStore.savePrompt(type);
+    ElMessage.success('配置已成功保存至服务器');
+  } catch (err: any) {
+    ElMessage.error(`保存失败: ${err.message || '未知错误'}`);
+  }
 };
 
 const handleLogout = () => {
