@@ -116,6 +116,8 @@ const {
 onMounted(async () => {
   console.log('[User/index.vue] Starting background data synchronization...');
   
+  evalStore.isHistoryLoaded = false;
+  
   await Promise.all([
     modelStore.fetchModels().catch(() => {}),
     knowledgeStore.fetchStandards().catch(() => {}),
@@ -161,6 +163,7 @@ onMounted(async () => {
         suggestions: latest.suggestions || '',
         is_archived: latest.is_archived,
         id: latest.id,
+        dimension_scores: latest.dimension_scores || null,
       };
       if (latest.parent_base_id) {
         evalStore.referencedBaselineIds = [latest.parent_base_id];
@@ -202,6 +205,7 @@ const loadHistory = async (history: any) => {
       suggestions: data.suggestions || '',
       is_archived: data.is_archived,
       id: data.id,
+      dimension_scores: data.dimension_scores || null,
     };
     if (data.parent_base_id) {
       evalStore.referencedBaselineIds = [data.parent_base_id];

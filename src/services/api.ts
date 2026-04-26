@@ -442,6 +442,48 @@ export const updatePrompt = (name: string, content: string): Promise<any> => {
 };
 
 // ─────────────────────────────────────────────
+// 扩展的提示词配置 API（Task 6）
+// ─────────────────────────────────────────────
+
+/**
+ * 获取 JSON 配置的结构定义（输出 Schema）
+ */
+export const fetchPromptSchema = (): Promise<{
+  fields: Record<string, {
+    type: string;
+    required: boolean;
+    description: string;
+  }>;
+  schema_lock: boolean;
+}> => {
+  return http.get('/api/prompts/schema');
+};
+
+/**
+ * 批量更新字段描述
+ */
+export const updateFieldDescriptions = (
+  name: string,
+  fields: Record<string, string>
+): Promise<any> => {
+  return http.patch(`/api/prompts/${name}/field-descriptions`, { fields });
+};
+
+/**
+ * 更新异味扣分规则配置
+ */
+export const updateSmellDeduction = (config: {
+  high_min: number;
+  high_max: number;
+  medium_min: number;
+  medium_max: number;
+  low_min: number;
+  low_max: number;
+}): Promise<any> => {
+  return http.put('/api/prompts/smell-deduction', config);
+};
+
+// ─────────────────────────────────────────────
 // 基线积木块 (Baseline Items) API
 // ─────────────────────────────────────────────
 

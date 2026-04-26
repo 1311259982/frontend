@@ -66,6 +66,32 @@
           </div>
         </div>
 
+        <!-- 多维度评分可视化（雷达图） -->
+        <section class="mb-8">
+          <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+            <el-icon class="text-blue-500"><DataAnalysis /></el-icon> 各维度评分分布
+          </h3>
+          
+          <!-- 有维度数据时显示雷达图 -->
+          <RadarChart 
+            v-if="dimensionScores && Object.keys(dimensionScores).length > 0"
+            :dimension-scores="dimensionScores"
+            width="100%"
+            height="420px"
+            @chart-click="handleDimensionClick"
+          />
+          
+          <!-- 无维度数据时显示降级提示 -->
+          <div v-else class="bg-gradient-to-br from-gray-50 to-blue-50/30 rounded-2xl border border-gray-200 p-12 text-center">
+            <el-icon :size="56" class="text-gray-300 mb-3"><DataAnalysis /></el-icon>
+            <p class="text-base font-semibold text-gray-400 mb-2">暂无维度评分数据</p>
+            <p class="text-xs text-gray-400 max-w-md mx-auto leading-relaxed">
+              系统可能使用旧版本评估模型，或该次评估未启用多维度分析功能。
+              <br>建议升级评估引擎以获取更详细的维度评分报告。
+            </p>
+          </div>
+        </section>
+
         <!-- Issues Analysis -->
         <section>
           <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
@@ -114,7 +140,8 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useEvaluationStore, useKnowledgeStore, useBaselineStore } from '@/store';
-import { Connection, Document, View, Top, Warning, CircleCheck, Download, Plus, Refresh, ChatDotRound } from '@element-plus/icons-vue';
+import { Connection, Document, View, Top, Warning, CircleCheck, Download, Plus, Refresh, ChatDotRound, DataAnalysis } from '@element-plus/icons-vue';
+import RadarChart from '@/components/RadarChart.vue';
 
 defineProps<{ settings: { model: string } }>();
 defineEmits(['previewFile', 'continueSupplementing', 'restart']);
@@ -128,6 +155,42 @@ const referencedBaselines = computed(() => {
     baselineStore.allFiles.find(f => f.id === id)
   ).filter(f => f);
 });
+
+/**
+ * 提取并转换维度评分数据
+ * 支持从 currentReport 中获取 dimension_scores 字段
+ * 兼容旧数据格式（如果后端尚未返回维度数据）
+ */
+const dimensionScores = computed(() => {
+  if (!evalStore.currentReport) return null;
+  
+  // 优先使用 dimension_scores 字段（新版本数据格式）
+  if (evalStore.currentReport.dimension_scores) {
+    return evalStore.currentReport.dimension_scores;
+  }
+  
+  // 兼容旧版本：如果维度数据在其他字段中，可以在这里添加转换逻辑
+  // 例如：if (evalStore.currentReport.dimensions) { ... }
+  
+  return null;
+});
+
+/**
+ * 处理雷达图维度点击事件
+ * 可扩展：点击某个维度时高亮显示对应的 issues
+ * @param dimension - 被点击的维度名称（英文 key）
+ * @param score - 该维度的分数
+ */
+function handleDimensionClick(dimension: string, score: number): void {
+  console.log('[Step4_Report] 维度点击:', dimension, '分数:', score);
+  
+  // TODO: 可扩展功能 - 根据点击的维度过滤或高亮对应的 issues
+  // 例如：如果点击 'completeness'，可以滚动到相关的完整性问题
+  
+  // 使用 Element Plus 消息提示反馈用户操作
+  // import { ElMessage } from 'element-plus'
+  // ElMessage.info(`您点击了「${getDimensionLabel(dimension)}」维度，得分: ${score}分`);
+}
 
 const getScoreColor = (score: number) => {
   if (score >= 80) return 'text-green-400';

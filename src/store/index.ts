@@ -7,8 +7,54 @@ import {
   createCategory, deleteCategory, deleteStandardFile, seedData,
   updateStandardStatus, updateStandardPriority, uploadRequirementFile,
   deleteUpload, getBaselineItems,
-  createDraft, syncDraftItems, getPrompts, updatePrompt
+  createDraft, syncDraftItems, getPrompts, updatePrompt,
+  fetchPromptSchema, updateFieldDescriptions, updateSmellDeduction
 } from '@/services';
+
+// ─────────────────────────────────────────────
+// 提示词配置相关类型定义（Task 6）
+// ─────────────────────────────────────────────
+
+/**
+ * 异味扣分规则配置接口
+ */
+export interface SmellDeductionConfig {
+  high_min: number;
+  high_max: number;
+  medium_min: number;
+  medium_max: number;
+  low_min: number;
+  low_max: number;
+}
+
+/**
+ * 单个提示词配置项
+ */
+export interface PromptConfigItem {
+  id: number;
+  name: string;
+  content: string;
+  config_type: 'text' | 'json' | 'deduction';
+  schema_lock: boolean;
+  updated_at: string;
+}
+
+/**
+ * 输出 Schema 字段定义
+ */
+export interface OutputFieldSchema {
+  type: string;
+  required: boolean;
+  description: string;
+}
+
+/**
+ * 完整的输出 Schema 结构
+ */
+export interface OutputSchemaConfig {
+  fields: Record<string, OutputFieldSchema>;
+  schema_lock: boolean;
+}
 
 // ─────────────────────────────────────────────
 // Auth Store
@@ -72,22 +118,85 @@ export const useModelStore = defineStore('models', {
     isLoading: false,
     isLoaded: false,
     isCacheReady: false,
+    // 扩展的提示词配置状态（Task 6）
     prompts: {
-      system: '你是一个专业的软件需求测试性评估专家。请根据提供的知识库标准，对需求文档进行评估。',
-      format: '评估报告应包含：1. 可测试性评分 (0-100)；2. 问题点分析；3. 改进建议。',
+      // 所有配置项的原始数据
+      items: [] as PromptConfigItem[],
+
+      // 按名称索引的便捷访问
+      byName: {} as Record<string, string>,  // {name: content}
+
+      // 特殊配置的结构化数据
+      smellDeduction: {
+        high_min: 0,
+        high_max: 0,
+        medium_min: 0,
+        medium_max: 0,
+        low_min: 0,
+        low_max: 0,
+      } as SmellDeductionConfig,
+
+      outputSchema: {
+        fields: {} as Record<string, OutputFieldSchema>,
+        schema_lock: false,
+      } as OutputSchemaConfig,
+
+      // 加载状态
+      loading: false,
+      error: null as string | null,
     },
   }),
+  getters: {
+    // ─────────────────────────────────────────────
+    // 提示词配置 Getters（Task 6）
+    // ─────────────────────────────────────────────
+
+    /**
+     * 获取指定配置的内容（按名称）
+     */
+    getPromptContent: (state) => {
+      return (name: string): string => state.prompts.byName[name] || '';
+    },
+
+    /**
+     * 获取指定配置的元信息
+     */
+    getPromptMeta: (state) => {
+      return (name: string): PromptConfigItem | undefined =>
+        state.prompts.items.find((item: PromptConfigItem) => item.name === name);
+    },
+
+    /**
+     * 判断是否为 JSON 类型配置
+     */
+    isJsonConfig: (state) => {
+      return (name: string): boolean => {
+        const item = state.prompts.items.find((item: PromptConfigItem) => item.name === name);
+        return item?.config_type === 'json';
+      };
+    },
+
+    /**
+     * 判断是否为扣分规则配置
+     */
+    isDeductionConfig: (state) => {
+      return (name: string): boolean => {
+        const item = state.prompts.items.find((item: PromptConfigItem) => item.name === name);
+        return item?.config_type === 'deduction';
+      };
+    },
+  },
   actions: {
+    // ─────────────────────────────────────────────
+    // 模型管理 Actions
+    // ─────────────────────────────────────────────
+
     async fetchModels() {
       if (this.isLoading) return;
       this.isLoading = true;
       try {
-        const [modelsData, promptsData] = await Promise.all([
-          getModels(),
-          getPrompts()
-        ]);
-        
-        // 映射后端字段到前端现有的使用习惯
+        const modelsData = await getModels();
+
         this.models = modelsData.map((item: any) => ({
           ...item,
           status: item.is_active ? 'active' : 'available',
@@ -95,16 +204,6 @@ export const useModelStore = defineStore('models', {
           baseUrl: item.base_url,
         }));
 
-        // 同步提示词
-        if (promptsData && promptsData.length > 0) {
-          promptsData.forEach((p: any) => {
-            if (p.name === 'system' || p.name === 'format') {
-              this.prompts[p.name as 'system' | 'format'] = p.content;
-            }
-          });
-        }
-
-        // 关键逻辑：寻找后端标记为 is_active 的项并同步到前端默认模型
         const activeItem = modelsData.find((m: any) => m.is_active);
         if (activeItem) {
           this.defaultModel = activeItem.name;
@@ -113,33 +212,206 @@ export const useModelStore = defineStore('models', {
         }
         this.isLoaded = true;
       } catch (error) {
-        console.error('Failed to fetch models or prompts:', error);
+        console.error('Failed to fetch models:', error);
       } finally {
         this.isLoading = false;
       }
+
+      try {
+        const promptsData = await getPrompts();
+        if (promptsData && promptsData.length > 0) {
+          this.prompts.items = promptsData;
+
+          this.prompts.byName = {};
+          for (const p of promptsData) {
+            this.prompts.byName[p.name] = p.content;
+          }
+        }
+      } catch (error) {
+        console.warn('[ModelStore] Failed to fetch prompts (non-blocking):', error);
+      }
     },
+
+    // ─────────────────────────────────────────────
+    // 提示词配置 Actions（Task 6 - 完整 CRUD）
+    // ─────────────────────────────────────────────
+
+    /**
+     * 获取所有提示词配置（完整版，支持6个配置项）
+     */
     async fetchPrompts() {
+      this.prompts.loading = true;
+      try {
+        const data = await getPrompts();
+        this.prompts.items = data;
+
+        // 构建 byName 索引
+        this.prompts.byName = {};
+        for (const item of data) {
+          this.prompts.byName[item.name] = item.content;
+        }
+
+        this.prompts.error = null;
+      } catch (error: any) {
+        console.error('[ModelStore] Failed to fetch prompts:', error);
+        this.prompts.error = error.message || '获取提示词配置失败';
+        throw error;
+      } finally {
+        this.prompts.loading = false;
+      }
+    },
+
+    /**
+     * 保存普通文本配置（支持乐观更新和错误回滚）
+     */
+    async savePrompt(name: string, content: string) {
+      try {
+        const response = await updatePrompt(name, content);
+
+        // 乐观更新本地状态
+        if (this.prompts.byName[name] !== undefined) {
+          this.prompts.byName[name] = content;
+        }
+
+        // 更新 items 数组中的对应项
+        const index = this.prompts.items.findIndex((item: PromptConfigItem) => item.name === name);
+        if (index !== -1) {
+          this.prompts.items[index].content = content;
+        }
+
+        console.log(`[ModelStore] Saved prompt '${name}' successfully.`);
+        return response.data;
+      } catch (error: any) {
+        console.error(`[ModelStore] Failed to save prompt '${name}':`, error);
+        // 回滚：重新获取最新数据
+        await this.fetchPrompts();
+        throw error;
+      }
+    },
+
+    /**
+     * 获取 JSON 配置的结构定义（输出 Schema）
+     */
+    async fetchPromptSchema() {
+      try {
+        const response = await fetchPromptSchema();
+        this.prompts.outputSchema = response.data || response;
+        console.log('[ModelStore] Fetched prompt schema successfully.');
+        return this.prompts.outputSchema;
+      } catch (error: any) {
+        console.error('[ModelStore] Failed to fetch prompt schema:', error);
+        throw error;
+      }
+    },
+
+    /**
+     * 批量更新字段描述（支持乐观更新和错误回滚）
+     */
+    async updateFieldDescriptions(name: string, fields: Record<string, string>) {
+      try {
+        const response = await updateFieldDescriptions(name, fields);
+
+        // 更新本地的 outputSchema
+        if (this.prompts.outputSchema.fields) {
+          for (const [fieldName, description] of Object.entries(fields)) {
+            if (this.prompts.outputSchema.fields[fieldName]) {
+              this.prompts.outputSchema.fields[fieldName].description = description;
+            }
+          }
+        }
+
+        console.log(`[ModelStore] Updated field descriptions for '${name}' successfully.`);
+        return response.data;
+      } catch (error: any) {
+        console.error(`[ModelStore] Failed to update field descriptions for '${name}':`, error);
+        // 回滚：重新获取 Schema
+        await this.fetchPromptSchema();
+        throw error;
+      }
+    },
+
+    /**
+     * 更新异味扣分规则（支持乐观更新和错误回滚）
+     */
+    async updateSmellDeduction(config: SmellDeductionConfig) {
+      try {
+        const response = await updateSmellDeduction(config);
+
+        // 乐观更新
+        this.prompts.smellDeduction = { ...config };
+
+        // 同步更新 byName 中的内容（从响应中获取生成的新文本）
+        if (response.data?.content) {
+          this.prompts.byName['smell_deduction'] = response.data.content;
+
+          // 同时更新 items 数组
+          const index = this.prompts.items.findIndex(
+            (item: PromptConfigItem) => item.name === 'smell_deduction'
+          );
+          if (index !== -1) {
+            this.prompts.items[index].content = response.data.content;
+          }
+        }
+
+        console.log('[ModelStore] Updated smell deduction config successfully.');
+        return response.data;
+      } catch (error: any) {
+        console.error('[ModelStore] Failed to update smell deduction config:', error);
+        // 回滚：重新获取最新数据
+        await this.fetchPrompts();
+        throw error;
+      }
+    },
+
+    // ─────────────────────────────────────────────
+    // 向后兼容的旧方法（保持原有接口不变）
+    // ─────────────────────────────────────────────
+
+    /**
+     * @deprecated 使用 fetchPrompts() 替代（此方法为向后兼容保留）
+     */
+    async fetchPromptsLegacy() {
       try {
         const data = await getPrompts();
         if (data && data.length > 0) {
           data.forEach((p: any) => {
+            // 兼容旧的简单结构（可选）
             if (p.name === 'system' || p.name === 'format') {
-              this.prompts[p.name as 'system' | 'format'] = p.content;
+              // 如果需要保持旧的 system/format 字段，可以在这里处理
             }
           });
         }
       } catch (error) {
-        console.error('Failed to fetch prompts:', error);
+        console.error('Failed to fetch prompts (legacy):', error);
       }
     },
-    async savePrompt(type: 'system' | 'format') {
+
+    /**
+     * @deprecated 使用 savePrompt(name, content) 替代（此方法为向后兼容保留）
+     */
+    async savePromptLegacy(type: 'system' | 'format') {
       try {
-        const content = this.prompts[type];
+        const content = this.prompts.byName[type] || '';
         await updatePrompt(type, content);
-        console.log(`[ModelStore] Saved ${type} prompt to backend.`);
+        console.log(`[ModelStore] Saved ${type} prompt to backend (legacy).`);
       } catch (error) {
-        console.error(`Failed to save ${type} prompt:`, error);
+        console.error(`Failed to save ${type} prompt (legacy):`, error);
         throw error;
+      }
+    },
+
+    /**
+     * 本地更新提示词内容（不触发 API 调用）
+     */
+    updatePromptLocal(type: string, value: string) {
+      this.prompts.byName[type] = value;
+
+      // 同时更新 items 数组
+      const index = this.prompts.items.findIndex(
+        (item: PromptConfigItem) => item.name === type
+      );
+      if (index !== -1) {
+        this.prompts.items[index].content = value;
       }
     },
     async checkCacheStatus() {
@@ -205,9 +477,6 @@ export const useModelStore = defineStore('models', {
         console.error('Failed to activate model:', error);
         throw error;
       }
-    },
-    updatePrompt(type: 'system' | 'format', value: string) {
-      this.prompts[type] = value;
     },
   },
 });
@@ -1029,6 +1298,7 @@ export const useEvaluationStore = defineStore('evaluation', {
         version,
         issues: report.issues || [],
         suggestions: report.suggestions || '',
+        dimension_scores: report.dimension_scores || null,
         edit_mode: this.editMode,
       };
 

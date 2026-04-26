@@ -377,41 +377,160 @@
           </div>
         </div>
 
-        <!-- System Settings -->
+        <!-- System Settings - 提示词配置管理（6个配置项） -->
         <div v-if="activeMenu === 'settings'" class="max-w-4xl space-y-8">
-          <el-card class="border-none shadow-sm rounded-2xl">
-            <template #header>
-              <div class="flex items-center gap-2 font-bold text-gray-800">
-                <el-icon><ChatDotRound /></el-icon> 系统提示词 (System Prompt)
-              </div>
-            </template>
-            <el-input
-              v-model="modelStore.prompts.system"
-              type="textarea"
-              :rows="5"
-              placeholder="配置 AI 评估时的核心指令..."
-            />
-            <div class="mt-4 flex justify-end">
-              <el-button type="primary" @click="savePrompt('system')">保存配置</el-button>
-            </div>
-          </el-card>
+          <!-- ==================== 分组1: 核心评估指令 ==================== -->
+          <div class="space-y-2">
+            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 mb-4">
+              <el-icon><Cpu /></el-icon> 核心评估指令
+            </h3>
 
-          <el-card class="border-none shadow-sm rounded-2xl">
-            <template #header>
-              <div class="flex items-center gap-2 font-bold text-gray-800">
-                <el-icon><Memo /></el-icon> 评估标准格式
+            <el-card v-for="config in corePromptConfigs" :key="config.name" class="border-none shadow-sm rounded-2xl">
+              <template #header>
+                <div class="flex items-center gap-2 font-bold text-gray-800">
+                  <el-icon><component :is="config.icon" /></el-icon>
+                  {{ config.label }}
+                </div>
+              </template>
+              <el-input
+                v-model="promptContents[config.name]"
+                type="textarea"
+                :rows="config.rows || 5"
+                :placeholder="config.placeholder"
+              />
+              <div class="mt-4 flex justify-end">
+                <el-button type="primary" @click="savePrompt(config.name)">保存配置</el-button>
               </div>
-            </template>
-            <el-input
-              v-model="modelStore.prompts.format"
-              type="textarea"
-              :rows="5"
-              placeholder="定义评估报告的输出结构和评分标准..."
-            />
-            <div class="mt-4 flex justify-end">
-              <el-button type="primary" @click="savePrompt('format')">保存配置</el-button>
-            </div>
-          </el-card>
+            </el-card>
+          </div>
+
+          <!-- ==================== 分组2: 上下文说明 ==================== -->
+          <div class="space-y-2">
+            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 mb-4">
+              <el-icon><Document /></el-icon> 上下文说明
+            </h3>
+
+            <el-card v-for="config in contextPromptConfigs" :key="config.name" class="border-none shadow-sm rounded-2xl">
+              <template #header>
+                <div class="flex items-center gap-2 font-bold text-gray-800">
+                  <el-icon><component :is="config.icon" /></el-icon>
+                  {{ config.label }}
+                </div>
+              </template>
+              <el-input
+                v-model="promptContents[config.name]"
+                type="textarea"
+                :rows="config.rows || 4"
+                :placeholder="config.placeholder"
+              />
+              <div class="mt-4 flex justify-end">
+                <el-button type="primary" @click="savePrompt(config.name)">保存配置</el-button>
+              </div>
+            </el-card>
+          </div>
+
+          <!-- ==================== 分组3: 规则与输出控制 ==================== -->
+          <div class="space-y-2">
+            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2 mb-4">
+              <el-icon><Setting /></el-icon> 规则与输出控制
+            </h3>
+
+            <!-- 5.2 异味扣分规则可视化配置面板 -->
+            <el-card class="border-none shadow-sm rounded-2xl">
+              <template #header>
+                <div class="flex items-center gap-2 font-bold text-gray-800">
+                  <el-icon><Warning /></el-icon> 异味扣分规则配置
+                  <el-tag size="small" type="warning" effect="plain">数值可调</el-tag>
+                </div>
+              </template>
+
+              <div class="space-y-4">
+                <!-- 高优先级 -->
+                <div class="flex items-center gap-4 p-3 bg-red-50 rounded-lg border border-red-100">
+                  <span class="w-20 text-sm font-bold text-red-700">高优先级</span>
+                  <span class="text-xs text-gray-500">严重</span>
+                  <div class="flex items-center gap-2 flex-1">
+                    <span class="text-sm">扣</span>
+                    <el-input-number v-model="deductionConfig.high_min" :min="0" :max="100" size="small" controls-position="right" />
+                    <span class="text-sm">-</span>
+                    <el-input-number v-model="deductionConfig.high_max" :min="0" :max="100" size="small" controls-position="right" />
+                    <span class="text-sm">分</span>
+                  </div>
+                </div>
+
+                <!-- 中优先级 -->
+                <div class="flex items-center gap-4 p-3 bg-yellow-50 rounded-lg border border-yellow-100">
+                  <span class="w-20 text-sm font-bold text-yellow-700">中优先级</span>
+                  <span class="text-xs text-gray-500">一般</span>
+                  <div class="flex items-center gap-2 flex-1">
+                    <span class="text-sm">扣</span>
+                    <el-input-number v-model="deductionConfig.medium_min" :min="0" :max="100" size="small" controls-position="right" />
+                    <span class="text-sm">-</span>
+                    <el-input-number v-model="deductionConfig.medium_max" :min="0" :max="100" size="small" controls-position="right" />
+                    <span class="text-sm">分</span>
+                  </div>
+                </div>
+
+                <!-- 低优先级 -->
+                <div class="flex items-center gap-4 p-3 bg-green-50 rounded-lg border border-green-100">
+                  <span class="w-20 text-sm font-bold text-green-700">低优先级</span>
+                  <span class="text-xs text-gray-500">轻微</span>
+                  <div class="flex items-center gap-2 flex-1">
+                    <span class="text-sm">扣</span>
+                    <el-input-number v-model="deductionConfig.low_min" :min="0" :max="100" size="small" controls-position="right" />
+                    <span class="text-sm">-</span>
+                    <el-input-number v-model="deductionConfig.low_max" :min="0" :max="100" size="small" controls-position="right" />
+                    <span class="text-sm">分</span>
+                  </div>
+                </div>
+
+                <!-- 预览区 -->
+                <div class="mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <p class="text-xs font-bold text-gray-500 mb-2">预览生成的文本：</p>
+                  <pre class="text-xs text-gray-600 whitespace-pre-wrap font-mono">{{ deductionPreview }}</pre>
+                </div>
+              </div>
+
+              <div class="mt-4 flex justify-end">
+                <el-button type="warning" @click="saveSmellDeduction">保存扣分规则</el-button>
+              </div>
+            </el-card>
+
+            <!-- 5.3 输出格式结构化字段编辑器 -->
+            <el-card class="border-none shadow-sm rounded-2xl">
+              <template #header>
+                <div class="flex items-center gap-2 font-bold text-gray-800">
+                  <el-icon><Memo /></el-icon> 评估输出格式
+                  <el-tag size="small" type="info" effect="plain">结构锁定</el-tag>
+                </div>
+              </template>
+
+              <div class="space-y-3">
+                <div v-for="(field, key) in outputFields" :key="key"
+                     class="flex items-start gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <!-- 左侧：字段名（只读） -->
+                  <div class="w-44 flex-shrink-0">
+                    <code class="text-sm font-mono font-bold text-blue-600">"{{ key }}"</code>
+                    <p class="text-xs text-gray-400 mt-1">{{ field.type }}</p>
+                  </div>
+
+                  <!-- 右侧：描述编辑 -->
+                  <div class="flex-1">
+                    <label class="text-xs text-gray-500 mb-1 block">字段描述（用户可见）</label>
+                    <el-input
+                      v-model="fieldDescriptions[key]"
+                      placeholder="输入该字段的描述文本..."
+                      size="small"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div class="mt-4 flex justify-end">
+                <el-button type="primary" @click="saveOutputFormat">保存格式配置</el-button>
+              </div>
+            </el-card>
+          </div>
         </div>
       </div>
     </main>
@@ -488,13 +607,14 @@
 import { ref, computed, reactive, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore, useModelStore, useKnowledgeStore, useBaselineStore, useSmellStore } from '@/store';
-import { 
-  Setting, Cpu, Files, ChatDotRound, Memo, 
+import {
+  Setting, Cpu, Files, ChatDotRound, Memo,
   SwitchButton, Plus, Edit, Delete, Document,
   Lock, User, Upload, ArrowDown, Collection,
-  DocumentChecked, Connection, Warning
+  DocumentChecked, Connection, Warning, DataAnalysis
 } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { updatePrompt, getPrompts } from '@/services/api';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -529,6 +649,22 @@ onMounted(async () => {
     knowledgeStore.fetchStandards(),
     smellStore.fetchSmells(),
   ]);
+
+  // 加载所有6个提示词配置项
+  try {
+    const promptsData = await getPrompts();
+    if (promptsData && Array.isArray(promptsData)) {
+      promptsData.forEach((p: any) => {
+        // 支持所有6个配置项：system, dimension_defs, smell_rules_intro, baseline_intro, smell_deduction, output_format
+        if (p.name && p.content !== undefined) {
+          promptContents[p.name] = p.content;
+        }
+      });
+      console.log('[Admin] 已加载所有提示词配置项');
+    }
+  } catch (error) {
+    console.error('[Admin] 加载提示词配置失败:', error);
+  }
 });
 
 const menuItems = reactive([
@@ -828,14 +964,141 @@ const handleRemoveModel = async (id: number) => {
   }
 };
 
-const savePrompt = async (type: 'system' | 'format') => {
+const savePrompt = async (name: string) => {
   try {
-    await modelStore.savePrompt(type);
-    ElMessage.success('配置已成功保存至服务器');
+    const content = promptContents[name];
+    await updatePrompt(name, content);
+    ElMessage.success(`"${name}" 配置已成功保存至服务器`);
   } catch (err: any) {
     ElMessage.error(`保存失败: ${err.message || '未知错误'}`);
   }
 };
+
+// ==================== 5.2 异味扣分规则配置数据 ====================
+
+/** 扣分规则数值配置 */
+const deductionConfig = reactive({
+  high_min: 5,
+  high_max: 10,
+  medium_min: 3,
+  medium_max: 5,
+  low_min: 1,
+  low_max: 3
+});
+
+/** 扣分规则预览文本（实时计算） */
+const deductionPreview = computed(() => {
+  return `代码异味扣分规则：
+- 【高优先级/严重】：违反此规则应扣除较多分数（建议扣${deductionConfig.high_min}-${deductionConfig.high_max}分）
+- 【中优先级/一般】：违反此规则应扣除中等分数（建议扣${deductionConfig.medium_min}-${deductionConfig.medium_max}分）
+- 【低优先级/轻微】：违反此规则应扣除较少分数（建议扣${deductionConfig.low_min}-${deductionConfig.low_max}分）
+
+注意：
+1. 同一类异味不重复扣分，取最高级别
+2. 总扣分不超过该项满分值
+3. 具体扣分由评估人员根据实际情况在建议范围内确定`;
+});
+
+/** 保存扣分规则 */
+const saveSmellDeduction = async () => {
+  try {
+    // 将数值配置转换为文本格式后保存
+    const content = deductionPreview.value;
+    await updatePrompt('smell_deduction', content);
+    ElMessage.success('扣分规则配置已保存');
+  } catch (err: any) {
+    ElMessage.error(`保存失败: ${err.message || '未知错误'}`);
+  }
+};
+
+// ==================== 5.3 输出格式字段编辑器数据 ====================
+
+/** 输出格式字段定义（只读结构） */
+const outputFields = {
+  total_score: { type: 'integer (0-100)' },
+  dimension_scores: { type: 'object (维度评分)' },
+  issues: { type: 'array (string[])' },
+  suggestions: { type: 'string (100-300字)' }
+};
+
+/** 字段描述（可编辑） */
+const fieldDescriptions = reactive<Record<string, string>>({
+  total_score: '<0-100整数，综合可测试性得分>',
+  dimension_scores: '{维度名: {score, detail}}',
+  issues: '[问题点列表]',
+  suggestions: '<整体优化建议>'
+});
+
+/** 保存输出格式配置 */
+const saveOutputFormat = async () => {
+  try {
+    const content = `请严格按照以下 JSON 格式输出评估结果，不要添加任何额外说明：
+{
+  "total_score": ${fieldDescriptions.total_score},
+  "dimension_scores": {
+    "<维度英文名>": {"score": <0-100整数>, "detail": "<该维度的具体评价>"}
+  },
+  "issues": [
+    ${fieldDescriptions.issues}
+  ],
+  "suggestions": ${fieldDescriptions.suggestions}
+}`;
+    await updatePrompt('output_format', content);
+    ElMessage.success('输出格式配置已保存');
+  } catch (err: any) {
+    ElMessage.error(`保存失败: ${err.message || '未知错误'}`);
+  }
+};
+
+// ==================== 普通文本配置项定义 ====================
+
+/** 核心评估指令组配置 */
+const corePromptConfigs = [
+  {
+    name: 'system',
+    label: '系统角色定义 (System Prompt)',
+    icon: 'ChatDotRound',
+    rows: 6,
+    placeholder: '配置 AI 评估专家的角色定义和核心指令...'
+  },
+  {
+    name: 'dimension_defs',
+    label: '维度定义 (Dimension Definitions)',
+    icon: 'DataAnalysis',
+    rows: 5,
+    placeholder: '定义各评估维度的具体含义和评分标准...'
+  }
+];
+
+/** 上下文说明组配置 */
+const contextPromptConfigs = [
+  {
+    name: 'smell_rules_intro',
+    label: '异味规则说明 (Smell Rules Intro)',
+    icon: 'Warning',
+    rows: 4,
+    placeholder: '说明代码异味规则的背景和使用方式...'
+  },
+  {
+    name: 'baseline_intro',
+    label: '基线说明 (Baseline Introduction)',
+    icon: 'DocumentChecked',
+    rows: 4,
+    placeholder: '说明基准需求的作用和引用机制...'
+  }
+];
+
+// ==================== 提示词内容存储（6个配置项） ====================
+
+/** 所有提示词内容的响应式存储 */
+const promptContents = reactive<Record<string, string>>({
+  system: '',
+  dimension_defs: '',
+  smell_rules_intro: '',
+  baseline_intro: '',
+  smell_deduction: '',
+  output_format: ''
+});
 
 const handleLogout = () => {
   authStore.logout();

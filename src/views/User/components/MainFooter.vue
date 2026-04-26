@@ -35,7 +35,7 @@
           开启新评估
         </el-button>
         <el-button 
-          v-if="evalStore.currentReport" 
+          v-if="evalStore.currentReport && !evalStore.currentReport.is_archived" 
           :type="evalStore.referencedBaselineIds.length > 0 ? 'warning' : 'success'" 
           plain 
           size="large" 
@@ -43,8 +43,11 @@
           icon="CollectionTag" 
           @click="$emit('archive')"
         >
-          {{ evalStore.referencedBaselineIds.length > 0 ? '归档为基准需求' : '归档为基准需求' }}
+          归档为基准需求
         </el-button>
+        <el-tag v-if="evalStore.currentReport?.is_archived" type="success" effect="plain" size="large" class="px-4 py-2">
+          已归档
+        </el-tag>
       </div>
     </div>
   </footer>

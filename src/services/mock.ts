@@ -110,6 +110,33 @@ const generateMockReport = (payload: StartEvaluationPayload) => ({
     total_score: randomScore(),
     task_type: payload.referenced_baseline_id ? 'incremental' : 'full',
     parent_base_id: payload.referenced_baseline_id || null,
+    // 多维度评分数据（用于雷达图展示）
+    dimension_scores: {
+        completeness: {
+            score: Math.floor(Math.random() * 25) + 70,  // 70-95分
+            detail: '需求描述的完整性评估，包括功能点覆盖度、边界条件说明等'
+        },
+        correctness: {
+            score: Math.floor(Math.random() * 30) + 65,  // 65-95分
+            detail: '需求内容的正确性验证，包括逻辑一致性、技术可行性等'
+        },
+        unambiguity: {
+            score: Math.floor(Math.random() * 35) + 60,  // 60-95分
+            detail: '需求表述的清晰度评估，排除二义性和模糊词汇'
+        },
+        feasibility: {
+            score: Math.floor(Math.random() * 25) + 70,  // 70-95分
+            detail: '需求实现的技术可行性分析，包括资源、时间、技术栈等'
+        },
+        verifiability: {
+            score: Math.floor(Math.random() * 30) + 65,  // 65-95分
+            detail: '需求的可测试性评估，包括验收标准、测试方法等'
+        },
+        traceability: {
+            score: Math.floor(Math.random() * 28) + 68,  // 68-96分
+            detail: '需求的可追溯性检查，包括编号规范、关联关系等'
+        }
+    },
     issues: [
         '需求 ID: REQ-001 描述中存在二义性词汇（如"尽快响应"），缺乏具体的毫秒级性能指标。',
         '需求 ID: REQ-004 缺乏明确的输入边界值定义，未说明超过 10000 条记录时的处理逻辑。',
