@@ -93,18 +93,53 @@
         </section>
 
         <!-- Issues Analysis -->
-        <section>
-          <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-            <el-icon class="text-red-500"><Warning /></el-icon> 问题点分析
-          </h3>
+        <section id="issues-analysis" class="scroll-mt-8">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+              <el-icon class="text-red-500"><Warning /></el-icon> 问题点分析
+            </h3>
+            
+            <!-- 维度选择状态 -->
+            <transition name="el-fade-in">
+              <div v-if="selectedDimension" class="flex items-center gap-2 bg-indigo-50 px-3 py-1.5 rounded-full border border-indigo-100">
+                <span class="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">当前视图:</span>
+                <span class="text-xs font-bold text-indigo-700">{{ dimensionLabels[selectedDimension] }}</span>
+                <el-button 
+                  link 
+                  :icon="Close" 
+                  class="p-0 h-auto text-indigo-400 hover:text-indigo-600"
+                  @click="clearFilter"
+                ></el-button>
+              </div>
+            </transition>
+          </div>
+
+          <!-- 维度专属评价 (点击维度后在上方展示) -->
+          <transition name="el-zoom-in-top">
+            <div v-if="selectedDimension && dimensionScores?.[selectedDimension]" class="mb-6 p-5 bg-gradient-to-br from-indigo-50/80 to-white border border-indigo-100 rounded-2xl shadow-sm">
+              <h4 class="text-sm font-bold text-indigo-800 mb-3 flex items-center gap-2">
+                <el-icon><DataAnalysis /></el-icon> {{ dimensionLabels[selectedDimension] }} - 维度综合诊断
+              </h4>
+              <p class="text-sm text-indigo-900/80 leading-relaxed font-medium">
+                {{ dimensionScores[selectedDimension].detail }}
+              </p>
+            </div>
+          </transition>
+
           <div class="space-y-3">
             <div 
               v-for="(issue, i) in evalStore.currentReport.issues" 
               :key="i"
-              class="p-4 bg-red-50/30 border-l-4 border-red-400 rounded-r-xl flex gap-3"
+              class="p-4 bg-red-50/30 border-l-4 border-red-400 rounded-r-xl flex gap-3 transition-all duration-300 hover:shadow-md"
+              :class="{ 'opacity-100 scale-100': !selectedDimension || issue.includes(dimensionLabels[selectedDimension]), 'opacity-50 grayscale-[0.5]': selectedDimension && !issue.includes(dimensionLabels[selectedDimension]) }"
             >
-              <span class="text-red-500 font-bold">0{{ Number(i)+1 }}</span>
+              <span class="text-red-500 font-bold">{{ (Number(i) + 1).toString().padStart(2, '0') }}</span>
               <p class="text-sm text-gray-700 leading-relaxed">{{ issue }}</p>
+              
+              <!-- 命中标注 -->
+              <div v-if="selectedDimension && issue.includes(dimensionLabels[selectedDimension])" class="ml-auto">
+                <el-tag size="small" type="danger" effect="light" round class="opacity-80">关联缺陷</el-tag>
+              </div>
             </div>
           </div>
         </section>
@@ -138,9 +173,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { ref, computed, nextTick } from 'vue';
 import { useEvaluationStore, useKnowledgeStore, useBaselineStore } from '@/store';
-import { Connection, Document, View, Top, Warning, CircleCheck, Download, Plus, Refresh, ChatDotRound, DataAnalysis } from '@element-plus/icons-vue';
+import { Connection, Document, View, Top, Warning, CircleCheck, Download, Plus, Refresh, ChatDotRound, DataAnalysis, Close } from '@element-plus/icons-vue';
 import RadarChart from '@/components/RadarChart.vue';
 
 defineProps<{ settings: { model: string } }>();
@@ -150,6 +185,18 @@ const evalStore = useEvaluationStore();
 const knowledgeStore = useKnowledgeStore();
 const baselineStore = useBaselineStore();
 
+// 当前选中的过滤维度
+const selectedDimension = ref<string | null>(null);
+
+const dimensionLabels: Record<string, string> = {
+  completeness: '完整性',
+  correctness: '正确性',
+  unambiguity: '无歧义性',
+  feasibility: '可行性',
+  verifiability: '可验证性',
+  traceability: '可跟踪性'
+};
+
 const referencedBaselines = computed(() => {
   return evalStore.referencedBaselineIds.map(id => 
     baselineStore.allFiles.find(f => f.id === id)
@@ -158,38 +205,45 @@ const referencedBaselines = computed(() => {
 
 /**
  * 提取并转换维度评分数据
- * 支持从 currentReport 中获取 dimension_scores 字段
- * 兼容旧数据格式（如果后端尚未返回维度数据）
  */
 const dimensionScores = computed(() => {
   if (!evalStore.currentReport) return null;
-  
-  // 优先使用 dimension_scores 字段（新版本数据格式）
   if (evalStore.currentReport.dimension_scores) {
     return evalStore.currentReport.dimension_scores;
   }
-  
-  // 兼容旧版本：如果维度数据在其他字段中，可以在这里添加转换逻辑
-  // 例如：if (evalStore.currentReport.dimensions) { ... }
-  
   return null;
 });
 
 /**
+ * 根据维度过滤问题列表
+ */
+const filteredIssues = computed(() => {
+  const allIssues = evalStore.currentReport?.issues || [];
+  if (!selectedDimension.value) return allIssues;
+  
+  const label = dimensionLabels[selectedDimension.value];
+  // 简单逻辑：检查问题文本中是否包含维度名称
+  return allIssues.filter((issue: string) => issue.includes(label));
+});
+
+/**
  * 处理雷达图维度点击事件
- * 可扩展：点击某个维度时高亮显示对应的 issues
- * @param dimension - 被点击的维度名称（英文 key）
- * @param score - 该维度的分数
  */
 function handleDimensionClick(dimension: string, score: number): void {
   console.log('[Step4_Report] 维度点击:', dimension, '分数:', score);
+  selectedDimension.value = dimension;
   
-  // TODO: 可扩展功能 - 根据点击的维度过滤或高亮对应的 issues
-  // 例如：如果点击 'completeness'，可以滚动到相关的完整性问题
-  
-  // 使用 Element Plus 消息提示反馈用户操作
-  // import { ElMessage } from 'element-plus'
-  // ElMessage.info(`您点击了「${getDimensionLabel(dimension)}」维度，得分: ${score}分`);
+  // 平滑滚动到问题分析区域
+  nextTick(() => {
+    const el = document.getElementById('issues-analysis');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  });
+}
+
+function clearFilter() {
+  selectedDimension.value = null;
 }
 
 const getScoreColor = (score: number) => {

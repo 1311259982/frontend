@@ -1,17 +1,44 @@
 <template>
   <div v-if="report" class="flex flex-col h-full bg-white">
-    <!-- Header: Score -->
-    <div class="p-6 bg-gradient-to-br from-gray-900 to-blue-900 text-white flex-shrink-0">
-      <div class="flex justify-between items-center">
-        <div>
-          <h2 class="text-xl font-bold mb-1">评估报告</h2>
-          <p class="text-xs opacity-60">版本评估结果概览</p>
-        </div>
-        <div class="text-center">
-          <div :class="['text-4xl font-black', getScoreColor(report.total_score || report.score)]">
-            {{ report.total_score || report.score || 0 }}
+    <!-- Header: Score & Mini Radar -->
+    <div class="p-4 bg-gradient-to-br from-gray-900 via-blue-950 to-blue-900 text-white flex-shrink-0 relative overflow-hidden">
+      <!-- 装饰背景 -->
+      <div class="absolute -right-10 -top-10 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl"></div>
+      
+      <div class="flex items-center relative z-10">
+        <!-- Title Section -->
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            <h2 class="text-lg font-bold tracking-tight">评估报告</h2>
+            <div class="px-1.5 py-0.5 rounded bg-blue-500/20 border border-blue-400/20 text-[8px] font-black uppercase tracking-widest text-blue-300">
+              Analysis
+            </div>
           </div>
-          <div class="text-[10px] uppercase tracking-widest opacity-60 font-bold">综合评分</div>
+          <p class="text-[10px] opacity-40 uppercase tracking-tighter mt-0.5">Model diagnostic summary</p>
+        </div>
+
+        <!-- Radar & Score Combined Section -->
+        <div class="flex items-center pl-4 border-l border-white/5 gap-4">
+          <!-- Mini Radar (No box, minimalist) -->
+          <div v-if="report.dimension_scores" class="flex-shrink-0">
+            <RadarChart 
+              :dimension-scores="report.dimension_scores" 
+              :is-mini="true" 
+              height="64px" 
+              width="64px"
+            />
+          </div>
+
+          <!-- Total Score -->
+          <div class="text-right flex flex-col items-end">
+            <div class="flex items-baseline gap-1">
+              <span :class="['text-4xl font-black italic tracking-tighter drop-shadow-2xl', getScoreColor(report.total_score || report.score)]">
+                {{ report.total_score || report.score || 0 }}
+              </span>
+              <span class="text-[10px] opacity-40 font-bold italic">PT</span>
+            </div>
+            <div class="text-[8px] uppercase tracking-widest opacity-40 font-black -mt-1">Final Score</div>
+          </div>
         </div>
       </div>
     </div>
@@ -39,7 +66,7 @@
             :key="i"
             class="p-3 bg-red-50/50 border-l-2 border-red-400 text-xs text-gray-700 leading-relaxed rounded-r-lg"
           >
-            <span class="font-bold text-red-500 mr-1">{{ i + 1 }}.</span>
+            <span class="font-bold text-red-500 mr-1">{{ Number(i) + 1 }}.</span>
             {{ issue }}
           </div>
         </div>
@@ -65,9 +92,13 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{
+import RadarChart from './RadarChart.vue'
+
+const props = defineProps<{
   report: any
 }>()
+
+console.log('[EvaluationReportView] Received report:', props.report)
 
 const getScoreColor = (score: number) => {
   if (score >= 80) return 'text-green-400'

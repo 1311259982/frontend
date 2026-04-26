@@ -21,18 +21,22 @@
 -->
 
 <template>
-  <div class="radar-chart-container" :style="containerStyle">
+  <div class="radar-chart-container" :style="containerStyle" @mousemove="handleMouseMove" @mouseleave="handleMouseLeave">
+    <!-- 背景装饰效果 -->
+    <div class="chart-bg-decoration"></div>
+    
     <!-- Loading 状态 -->
     <div v-if="loading" class="chart-loading">
       <el-icon class="is-loading" :size="48"><Loading /></el-icon>
-      <p class="loading-text">数据加载中...</p>
+      <p class="loading-text">数据分析中...</p>
     </div>
 
     <!-- 空数据提示 -->
     <div v-else-if="!hasData" class="chart-empty">
-      <el-icon :size="48" class="empty-icon"><DataAnalysis /></el-icon>
+      <div class="empty-glow"></div>
+      <el-icon :size="56" class="empty-icon"><DataAnalysis /></el-icon>
       <p class="empty-text">暂无维度评分数据</p>
-      <p class="empty-hint">请等待评估完成或检查数据源</p>
+      <p class="empty-hint">请完成评估流程以解锁详细的维度多维分析报告</p>
     </div>
 
     <!-- 雷达图 -->
@@ -44,24 +48,31 @@
       autoresize
       @click="handleChartClick"
     />
+
+    <!-- 自定义迷你提示框（单点触发） -->
+    <div v-if="isMini && tooltipVisible && hoveredDim" 
+         class="absolute pointer-events-none z-[1000] transition-opacity duration-150"
+         :style="{ left: tooltipX + 8 + 'px', top: tooltipY - 12 + 'px' }">
+      <div class="px-2 py-0.5 bg-[#0f172a] border border-[#334155] rounded shadow-lg whitespace-nowrap flex items-baseline gap-1.5">
+        <span class="text-[9px] text-[#94a3b8]">{{ hoveredDim.name }}</span>
+        <span class="text-[11px] font-black text-[#60a5fa]">{{ hoveredDim.score }}</span>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 /**
- * RadarChart.vue - 多维度评估结果雷达图组件
+ * RadarChart.vue - 高级多维度评估结果雷达图组件
  *
- * 功能特性：
- * 1. 使用 ECharts 渲染高性能雷达图
- * 2. 动态生成维度轴，根据数据自动调整
- * 3. 支持中英文维度名称映射
- * 4. 丰富的交互效果和 tooltip 提示
- * 5. 响应式布局，自适应容器大小
- * 6. 优雅的降级处理和 loading 状态
+ * 优化特性：
+ * 1. 采用深色/渐变视觉设计，契合 AI 评估的高端定位
+ * 2. 移除冗余轴标签，减少视觉噪音
+ * 3. 动态发光数据点与平滑面积渐变
+ * 4. 增强型交互 Tooltip，支持状态等级显示
  */
 
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
-// 注意：以下导入需要在安装 echarts 和 vue-echarts 后取消注释
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -72,8 +83,9 @@ import {
   LegendComponent,
   GridComponent
 } from 'echarts/components'
+import { Loading, DataAnalysis } from '@element-plus/icons-vue'
 
-// 注册 ECharts 组件（需要在安装依赖后启用）
+// 注册 ECharts 组件
 use([
   CanvasRenderer,
   RadarChartComponent,
@@ -85,19 +97,11 @@ use([
 
 // ==================== 类型定义 ====================
 
-/**
- * 单个维度的评分数据
- */
 interface DimensionScore {
-  /** 分数，范围 0-100 的整数 */
   score: number
-  /** 详细说明文字 */
   detail: string
 }
 
-/**
- * 维度评分集合，key 为维度英文名，value 为对应的评分数据
- */
 interface DimensionScores {
   [dimensionKey: string]: DimensionScore
 }
@@ -105,19 +109,17 @@ interface DimensionScores {
 // ==================== Props 定义 ====================
 
 const props = withDefaults(defineProps<{
-  /** 维度评分数据对象 */
   dimensionScores?: DimensionScores | null
-  /** 容器宽度，默认 '100%' */
   width?: string
-  /** 容器高度，默认 '400px' */
   height?: string
-  /** 是否显示 loading 状态 */
   loading?: boolean
+  isMini?: boolean
 }>(), {
   dimensionScores: null,
   width: '100%',
-  height: '400px',
-  loading: false
+  height: '420px',
+  loading: false,
+  isMini: false
 })
 
 // ==================== Emits 定义 ====================
@@ -128,10 +130,6 @@ const emit = defineEmits<{
 
 // ==================== 维度名称映射表 ====================
 
-/**
- * 英文维度 key 到中文显示名称的映射
- * 可根据实际业务需求扩展
- */
 const dimensionLabels: Record<string, string> = {
   completeness: '完整性',
   correctness: '正确性',
@@ -143,320 +141,339 @@ const dimensionLabels: Record<string, string> = {
 
 // ==================== 响应式数据 ====================
 
-/** 图表实例引用 */
 const chartRef = ref<any>(null)
+
+// 悬停单点提示框状态
+const tooltipVisible = ref(false)
+const tooltipX = ref(0)
+const tooltipY = ref(0)
+const hoveredDim = ref<{name: string, score: number} | null>(null)
 
 // ==================== 计算属性 ====================
 
-/**
- * 判断是否有有效的维度数据
- */
 const hasData = computed(() => {
   if (!props.dimensionScores) return false
   return Object.keys(props.dimensionScores).length > 0
 })
 
-/**
- * 容器样式
- */
 const containerStyle = computed(() => ({
   width: props.width,
   height: props.height,
   position: 'relative' as const
 }))
 
-/**
- * 图表样式
- */
 const chartStyle = computed(() => ({
   width: '100%',
   height: '100%'
 }))
 
 /**
+ * 根据分数获取评价等级
+ */
+function getScoreLevel(score: number): { label: string, color: string } {
+  if (score >= 90) return { label: '极佳', color: '#10b981' }
+  if (score >= 80) return { label: '优秀', color: '#34d399' }
+  if (score >= 70) return { label: '良好', color: '#60a5fa' }
+  if (score >= 60) return { label: '及格', color: '#fbbf24' }
+  return { label: '待改进', color: '#f87171' }
+}
+
+/**
  * 生成 ECharts 配置项
- * 根据传入的 dimensionScores 动态构建雷达图配置
  */
 const chartOption = computed(() => {
-  // 如果没有数据，返回空配置
-  if (!hasData.value) {
-    return {}
-  }
+  if (!hasData.value) return {}
 
   const scores = props.dimensionScores!
   const dimensions = Object.keys(scores)
-
-  // 构建雷达图的指示器配置
+  
+  // 构建指示器配置
   const indicators = dimensions.map(key => ({
-    name: dimensionLabels[key] || key,  // 使用中文映射，如果没有则显示原始 key
-    max: 100,  // 最大值为 100
-    min: 0,    // 最小值为 0
-    // 标签样式配置
-    axisLabel: {
-      show: true,
-      fontSize: 12,
-      color: '#666'
-    }
+    name: dimensionLabels[key] || key,
+    max: 100,
+    axisLabel: { show: false } // 隐藏嘈杂的轴数值
   }))
 
-  // 提取分数数组
   const scoreValues = dimensions.map(key => scores[key].score)
+  
+  // 核心视觉配置：根据平均分决定主题色调
+  const avgScore = scoreValues.reduce((a, b) => a + b, 0) / scoreValues.length
+  const themeColor = avgScore >= 60 ? '#6366f1' : '#f43f5e' // 蓝紫色或珊瑚红
+  const glowColor = avgScore >= 60 ? 'rgba(99, 102, 241, 0.5)' : 'rgba(244, 63, 94, 0.5)'
 
-  // 构建 ECharts 完整配置
   return {
-    // 提示框配置
     tooltip: {
-      trigger: 'item',           // 触发方式：数据项触发
-      backgroundColor: 'rgba(255, 255, 255, 0.96)',
-      borderColor: '#e4e7ed',
+      show: !props.isMini, // 迷你模式使用自定义的单点 Hover 逻辑，禁用原生
+      trigger: 'item',
+      backgroundColor: 'rgba(15, 23, 42, 0.95)',
+      backdropFilter: 'blur(12px)',
+      borderColor: 'rgba(255, 255, 255, 0.2)',
       borderWidth: 1,
       padding: [12, 16],
-      textStyle: {
-        color: '#303133',
+      textStyle: { 
+        color: '#f8fafc', 
         fontSize: 13,
-        lineHeight: 20
+        fontFamily: 'Inter, sans-serif'
       },
-      // 自定义 tooltip 格式化函数
       formatter: (params: any) => {
-        const dataIndex = params.dataIndex
-        const dimensionKey = dimensions[dataIndex]
-        const dimensionScore = scores[dimensionKey]
+        const scoreValues = params.value
 
-        // 构建富文本 HTML
-        let html = `<div style="font-weight: 600; margin-bottom: 8px; color: #409EFF;">`
-        html += `${dimensionLabels[dimensionKey] || dimensionKey}`
-        html += `</div>`
-        html += `<div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px;">`
-        html += `<span style="color: #909399;">得分：</span>`
-        html += `<span style="font-size: 18px; font-weight: bold; color: ${getScoreColor(dimensionScore.score)};">`
-        html += `${dimensionScore.score}</span>`
-        html += `<span style="color: #909399;">/ 100</span>`
-        html += `</div>`
+        let html = `
+          <div style="min-width: 220px; max-width: 350px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;">
+              <span style="font-weight: 800; font-size: 13px; color: #94a3b8; letter-spacing: 1px;">多维度评分详情</span>
+              <span style="font-size: 10px; color: #64748b; font-weight: 400;">模型评估结果</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+        `
 
-        // 显示详细说明（如果有）
-        if (dimensionScore.detail) {
-          html += `<div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #ebeef5; color: #606266; font-size: 12px; line-height: 1.6;">`
-          html += `${dimensionScore.detail}`
-          html += `</div>`
-        }
+        dimensions.forEach((key, i) => {
+          const score = scoreValues[i]
+          const label = dimensionLabels[key] || key
+          const level = getScoreLevel(score)
+          
+          html += `
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div style="width: 6px; height: 6px; border-radius: 50%; background: ${themeColor}; opacity: ${0.3 + (score/100)*0.7}"></div>
+                <span style="color: #f8fafc; font-size: 13px; font-weight: 500;">${label}</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="font-weight: 700; color: #fff; font-family: 'Outfit', sans-serif; font-size: 14px;">${score}</span>
+                <span style="min-width: 44px; text-align: center; background: ${level.color}; color: white; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;">${level.label}</span>
+              </div>
+            </div>
+          `
+        })
 
+        html += `
+            </div>
+            <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.05); color: #64748b; font-size: 10px; font-style: italic; text-align: right;">
+              * 点击维度轴可查看详细扣分原因
+            </div>
+          </div>
+        `
         return html
       },
-      extraCssText: 'box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); border-radius: 8px;'
+      extraCssText: 'backdrop-filter: blur(8px); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3); border: none; border-radius: 12px; z-index: 1000;',
+      confine: true // 强制限制在容器内，防止被外层容器裁剪
     },
-
-    // 雷达图配置
     radar: {
-      center: ['50%', '55%'],     // 图表中心位置
-      radius: '65%',               // 半径占比
-      startAngle: 90,              // 起始角度
-      splitNumber: 5,              // 分割段数
-      shape: 'polygon',            // 形状：多边形
+      center: ['50%', '50%'],
+      radius: props.isMini ? '95%' : '65%', // 放大迷你模式半径，充分利用有限空间
+      splitNumber: props.isMini ? 3 : 4,
+      triggerEvent: true, // 开启事件响应
       axisName: {
-        color: '#303133',
-        fontSize: 13,
-        fontWeight: 500,
-        padding: [3, 4]
+        show: !props.isMini, // 迷你模式隐藏标签
+        color: '#475569',
+        fontSize: 14,
+        fontWeight: 600,
+        padding: [8, 12],
+        fontFamily: 'Inter, sans-serif'
       },
       splitArea: {
+        show: !props.isMini,
         areaStyle: {
-          color: [
-            'rgba(64, 158, 255, 0.02)',
-            'rgba(64, 158, 255, 0.04)',
-            'rgba(64, 158, 255, 0.06)',
-            'rgba(64, 158, 255, 0.08)',
-            'rgba(64, 158, 255, 0.10)'
-          ],
-          shadowColor: 'rgba(0, 0, 0, 0.05)',
-          shadowBlur: 10
-        }
-      },
-      axisLine: {
-        lineStyle: {
-          color: 'rgba(144, 147, 153, 0.3)'
+          color: ['rgba(255, 255, 255, 0.02)', 'rgba(255, 255, 255, 0.05)']
         }
       },
       splitLine: {
         lineStyle: {
-          color: 'rgba(144, 147, 153, 0.2)'
+          color: 'rgba(148, 163, 184, 0.1)',
+          type: props.isMini ? 'solid' : 'dashed'
         }
       },
-      // 指示器配置
+      axisLine: {
+        lineStyle: {
+          color: 'rgba(148, 163, 184, 0.1)'
+        }
+      },
       indicator: indicators
     },
-
-    // 数据系列配置
-    series: [
-      {
-        type: 'radar',             // 图表类型：雷达图
-        data: [
-          {
-            value: scoreValues,    // 各维度分数值
-            name: '维度评分',
-            symbol: 'circle',       // 数据点形状
-            symbolSize: 6,         // 数据点大小
-            // 数据区域填充样式（渐变色）
-            areaStyle: {
-              color: {
-                type: 'linear',
-                x: 0,
-                y: 0,
-                x2: 0,
-                y2: 1,
-                colorStops: [
-                  { offset: 0, color: 'rgba(64, 158, 255, 0.45)' },   // 渐变起始色
-                  { offset: 1, color: 'rgba(102, 177, 255, 0.25)' }   // 渐变结束色
-                ]
-              }
-            },
-            // 线条样式
-            lineStyle: {
-              width: 2.5,
-              color: '#409EFF',
-              opacity: 0.9
-            },
-            // 数据点样式
-            itemStyle: {
-              color: '#409EFF',
-              borderColor: '#fff',
-              borderWidth: 2,
-              shadowColor: 'rgba(64, 158, 255, 0.4)',
-              shadowBlur: 6,
-              shadowOffsetY: 2
-            }
-          }
-        ],
-        // 高亮样式
+    series: [{
+      type: 'radar',
+      data: [{
+        value: scoreValues,
+        name: '维度评分',
+        symbol: 'circle',
+        symbolSize: props.isMini ? 4 : 8,
+        itemStyle: {
+          color: themeColor,
+          borderColor: '#fff',
+          borderWidth: props.isMini ? 1 : 2,
+          shadowColor: glowColor,
+          shadowBlur: props.isMini ? 4 : 10
+        },
+        lineStyle: {
+          width: props.isMini ? 2 : 4,
+          color: themeColor,
+          cap: 'round'
+        },
+        areaStyle: {
+          color: {
+            type: 'radial',
+            x: 0.5, y: 0.5, r: 0.5,
+            colorStops: [
+              { offset: 0, color: 'rgba(99, 102, 241, 0.1)' },
+              { offset: 0.8, color: 'rgba(99, 102, 241, 0.4)' },
+              { offset: 1, color: glowColor }
+            ]
+          },
+          shadowBlur: props.isMini ? 0 : 20,
+          shadowColor: 'rgba(99, 102, 241, 0.3)'
+        },
+        label: {
+          show: false, // 非悬停状态不展示分数
+          formatter: '{c}',
+          position: 'top',
+          color: themeColor,
+          fontSize: 10,
+          fontWeight: 'bold',
+          distance: 5
+        },
         emphasis: {
-          itemStyle: {
-            color: '#f56c6c',
-            borderColor: '#fff',
-            borderWidth: 3,
-            shadowColor: 'rgba(245, 108, 108, 0.6)',
-            shadowBlur: 12
+          lineStyle: {
+            width: props.isMini ? 3 : 6,
+            shadowBlur: 10,
+            shadowColor: themeColor
           },
           areaStyle: {
-            color: 'rgba(245, 108, 108, 0.35)'
+            opacity: 0.6
           },
-          lineStyle: {
-            width: 3.5,
-            color: '#f56c6c'
+          label: {
+            show: !props.isMini, // 迷你模式下不再展示全量的丑陋 label，交由 custom tooltip 处理
+            fontSize: 16,
+            color: '#fff',
+            backgroundColor: themeColor,
+            padding: [2, 4],
+            borderRadius: 4
           }
-        },
-        // 动画配置
-        animation: true,
-        animationDuration: 1200,
-        animationEasing: 'cubicOut'
-      }
-    ]
+        }
+      }],
+      animationDuration: 1000
+    }]
   }
 })
 
 // ==================== 方法 ====================
 
-/**
- * 根据分数获取颜色
- * @param score - 分数值（0-100）
- * @returns 对应的颜色字符串
- */
-function getScoreColor(score: number): string {
-  if (score >= 80) return '#67C23A'   // 绿色：优秀
-  if (score >= 60) return '#E6A23C'   // 橙色：良好
-  if (score >= 40) return '#F56C6C'   // 红色：及格边缘
-  return '#909399'                     // 灰色：较差
-}
+function handleMouseMove(e: MouseEvent) {
+  if (!props.isMini || !hasData.value) return
+  
+  const container = e.currentTarget as HTMLElement
+  const rect = container.getBoundingClientRect()
+  const cx = rect.width / 2
+  const cy = rect.height / 2
+  const dx = e.clientX - rect.left - cx
+  const dy = e.clientY - rect.top - cy
+  
+  const distance = Math.sqrt(dx * dx + dy * dy)
+  // 如果距离中心点较远，取消悬停状态
+  if (distance > rect.width / 2) {
+    tooltipVisible.value = false
+    return
+  }
 
-/**
- * 处理图表点击事件
- * @param params - ECharts 事件参数
- */
-function handleChartClick(params: any): void {
-  if (!params.data || !hasData.value) return
+  // 计算角度（12点钟方向为0度，顺时针递增）
+  let angle = Math.atan2(dy, dx) * 180 / Math.PI
+  angle = angle + 90
+  if (angle < 0) angle += 360
 
   const dimensions = Object.keys(props.dimensionScores!)
-  const clickedDimension = dimensions[params.dataIndex]
-  const clickedScore = props.dimensionScores![clickedDimension].score
-
-  // 向父组件发送点击事件
-  emit('chartClick', clickedDimension, clickedScore)
+  const numDims = dimensions.length
+  const anglePerDim = 360 / numDims
+  
+  // 计算最接近的维度的索引
+  const closestIdx = Math.round(angle / anglePerDim) % numDims
+  const key = dimensions[closestIdx]
+  
+  hoveredDim.value = {
+    name: dimensionLabels[key] || key,
+    score: props.dimensionScores![key].score
+  }
+  
+  tooltipX.value = e.clientX - rect.left
+  tooltipY.value = e.clientY - rect.top
+  tooltipVisible.value = true
 }
 
-/**
- * 手动调整图表尺寸
- * 在容器大小变化时调用
- */
-function resizeChart(): void {
-  if (chartRef.value && chartRef.value.resize) {
-    nextTick(() => {
-      chartRef.value.resize()
-    })
+function handleMouseLeave() {
+  tooltipVisible.value = false
+}
+
+function handleChartClick(params: any): void {
+  if (props.isMini || !hasData.value) return
+  
+  let clickedDimension = ''
+  let clickedScore = 0
+
+  // 情况1：点击的是雷达图中的数据点或面积区域
+  if (params.componentType === 'series') {
+    const dimensions = Object.keys(props.dimensionScores!)
+    clickedDimension = dimensions[params.dataIndex]
+    clickedScore = props.dimensionScores![clickedDimension].score
+  } 
+  // 情况2：点击的是雷达图周边的维度名称（坐标轴标签）
+  else if (params.componentType === 'radar') {
+    const labelName = params.name
+    // 通过中文标签名反查英文 key
+    const dimensionEntry = Object.entries(dimensionLabels).find(([_, label]) => label === labelName)
+    clickedDimension = dimensionEntry ? dimensionEntry[0] : labelName
+    clickedScore = props.dimensionScores![clickedDimension]?.score || 0
+  }
+
+  if (clickedDimension) {
+    emit('chartClick', clickedDimension, clickedScore)
   }
 }
 
-// ==================== 监听器 ====================
+function resizeChart(): void {
+  if (chartRef.value?.resize) {
+    nextTick(() => chartRef.value.resize())
+  }
+}
 
-/**
- * 监听 dimensionScores 变化
- * 当数据更新时重新渲染图表
- */
-watch(
-  () => props.dimensionScores,
-  () => {
-    // 使用 nextTick 确保 DOM 更新后再调整尺寸
-    nextTick(() => {
-      resizeChart()
-    })
-  },
-  { deep: true }
-)
-
-// ==================== 生命周期钩子 ====================
+watch(() => props.dimensionScores, () => nextTick(resizeChart), { deep: true })
 
 onMounted(() => {
-  // 组件挂载后初始化图表尺寸
-  nextTick(() => {
-    resizeChart()
-  })
-
-  // 监听窗口 resize 事件，实现响应式布局
+  nextTick(resizeChart)
   window.addEventListener('resize', handleWindowResize)
 })
 
 onBeforeUnmount(() => {
-  // 组件卸载前移除事件监听，防止内存泄漏
   window.removeEventListener('resize', handleWindowResize)
 })
 
-/**
- * 窗口大小变化事件处理函数
- * 使用防抖优化性能
- */
 let resizeTimer: ReturnType<typeof setTimeout> | null = null
 function handleWindowResize(): void {
   if (resizeTimer) clearTimeout(resizeTimer)
-
-  resizeTimer = setTimeout(() => {
-    resizeChart()
-  }, 200)  // 200ms 防抖延迟
+  resizeTimer = setTimeout(resizeChart, 200)
 }
 </script>
 
 <style scoped>
-/* 容器样式 */
 .radar-chart-container {
+  background: v-bind("isMini ? 'transparent' : '#ffffff'");
+  border-radius: 24px;
+  border: v-bind("isMini ? 'none' : '1px solid rgba(226, 232, 240, 0.8)'");
+  overflow: visible; /* 改为 visible，允许标签和 Tooltip 溢出显示 */
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: #fafbfc;
-  border-radius: 12px;
-  border: 1px solid #e4e7ed;
-  overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  z-index: 10;
 }
 
-/* Loading 状态样式 */
-.chart-loading {
+/* 装饰性背景光晕 */
+.chart-bg-decoration {
+  position: absolute;
+  top: -10%;
+  right: -10%;
+  width: 40%;
+  height: 40%;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.05) 0%, transparent 70%);
+  z-index: -1;
+  pointer-events: none;
+}
+
+.chart-loading, .chart-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -464,57 +481,42 @@ function handleWindowResize(): void {
   gap: 16px;
   width: 100%;
   height: 100%;
-  background: linear-gradient(135deg, #fafbfc 0%, #f0f2f5 100%);
 }
 
-.loading-text {
-  font-size: 14px;
-  color: #909399;
-  font-weight: 500;
-  letter-spacing: 0.5px;
-}
-
-/* 空数据提示样式 */
-.chart-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  width: 100%;
-  height: 100%;
-  padding: 24px;
-  text-align: center;
-  background: linear-gradient(135deg, #fafbfc 0%, #f5f7fa 100%);
+.loading-text, .empty-text {
+  font-size: 15px;
+  font-weight: 600;
+  color: #64748b;
 }
 
 .empty-icon {
-  opacity: 0.25;
-  color: #c0c4cc;
-}
-
-.empty-text {
-  font-size: 15px;
-  font-weight: 600;
-  color: #909399;
-  margin: 0;
+  color: #cbd5e1;
+  filter: drop-shadow(0 0 12px rgba(203, 213, 225, 0.4));
 }
 
 .empty-hint {
   font-size: 12px;
-  color: #c0c4cc;
-  margin: 0;
+  color: #94a3b8;
   max-width: 280px;
+  text-align: center;
   line-height: 1.6;
 }
 
-/* 图表元素过渡动画 */
-.radar-chart-container :deep(.v-chart) {
-  transition: opacity 0.3s ease;
+/* 发光效果 */
+.empty-glow {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.08) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
 }
 
-/* 悬停效果 */
+:deep(.v-chart) {
+  transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
 .radar-chart-container:hover :deep(.v-chart) {
-  opacity: 0.95;
+  transform: scale(1.02);
 }
 </style>
