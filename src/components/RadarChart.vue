@@ -203,60 +203,23 @@ const chartOption = computed(() => {
 
   return {
     tooltip: {
-      show: !props.isMini, // 迷你模式使用自定义的单点 Hover 逻辑，禁用原生
+      show: !props.isMini, // 普通模式下开启提示
       trigger: 'item',
-      backgroundColor: 'rgba(15, 23, 42, 0.95)',
-      backdropFilter: 'blur(12px)',
-      borderColor: 'rgba(255, 255, 255, 0.2)',
+      backgroundColor: 'rgba(15, 23, 42, 0.85)',
+      backdropFilter: 'blur(8px)',
+      borderColor: 'rgba(255, 255, 255, 0.1)',
       borderWidth: 1,
-      padding: [12, 16],
-      textStyle: { 
-        color: '#f8fafc', 
-        fontSize: 13,
-        fontFamily: 'Inter, sans-serif'
-      },
+      padding: [8, 12],
       formatter: (params: any) => {
-        const scoreValues = params.value
-
-        let html = `
-          <div style="min-width: 220px; max-width: 350px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;">
-              <span style="font-weight: 800; font-size: 13px; color: #94a3b8; letter-spacing: 1px;">多维度评分详情</span>
-              <span style="font-size: 10px; color: #64748b; font-weight: 400;">模型评估结果</span>
-            </div>
-            <div style="display: flex; flex-direction: column; gap: 10px;">
-        `
-
-        dimensions.forEach((key, i) => {
-          const score = scoreValues[i]
-          const label = dimensionLabels[key] || key
-          const level = getScoreLevel(score)
-          
-          html += `
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <div style="width: 6px; height: 6px; border-radius: 50%; background: ${themeColor}; opacity: ${0.3 + (score/100)*0.7}"></div>
-                <span style="color: #f8fafc; font-size: 13px; font-weight: 500;">${label}</span>
-              </div>
-              <div style="display: flex; align-items: center; gap: 12px;">
-                <span style="font-weight: 700; color: #fff; font-family: 'Outfit', sans-serif; font-size: 14px;">${score}</span>
-                <span style="min-width: 44px; text-align: center; background: ${level.color}; color: white; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;">${level.label}</span>
-              </div>
-            </div>
-          `
-        })
-
-        html += `
-            </div>
-            <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.05); color: #64748b; font-size: 10px; font-style: italic; text-align: right;">
-              * 点击维度轴可查看详细扣分原因
-            </div>
-          </div>
-        `
-        return html
+        if (params.componentType === 'series') {
+          return `<div style="font-size: 12px; color: #f8fafc; display: flex; align-items: center; gap: 6px;">
+                    <span style="font-size: 14px;">💡</span> 提示：请点击外围的维度名称查看诊断详情
+                  </div>`
+        }
+        return ''
       },
-      extraCssText: 'backdrop-filter: blur(8px); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3); border: none; border-radius: 12px; z-index: 1000;',
-      confine: true // 强制限制在容器内，防止被外层容器裁剪
+      extraCssText: 'border-radius: 8px; z-index: 1000;',
+      confine: true
     },
     radar: {
       center: ['50%', '50%'],
@@ -341,12 +304,7 @@ const chartOption = computed(() => {
             opacity: 0.6
           },
           label: {
-            show: !props.isMini, // 迷你模式下不再展示全量的丑陋 label，交由 custom tooltip 处理
-            fontSize: 16,
-            color: '#fff',
-            backgroundColor: themeColor,
-            padding: [2, 4],
-            borderRadius: 4
+            show: false // 无论是普通模式还是迷你模式，都不在悬停时展示全部丑陋标签
           }
         }
       }],
@@ -403,6 +361,11 @@ function handleMouseLeave() {
 
 function handleChartClick(params: any): void {
   if (props.isMini || !hasData.value) return
+  
+  // 阻止点击雷达图多边形本体（Series），强制用户点击外围坐标轴标签
+  if (params.componentType === 'series') {
+    return
+  }
   
   let clickedDimension = ''
   let clickedScore = 0

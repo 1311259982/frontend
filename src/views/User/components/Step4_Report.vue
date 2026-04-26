@@ -1,160 +1,167 @@
 <template>
   <div v-if="evalStore.currentReport" class="max-w-4xl mx-auto space-y-8 pb-24">
     <div class="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
-      <!-- Report Header -->
-      <div class="p-8 bg-gradient-to-r from-gray-900 to-blue-900 text-white">
-        <div class="flex justify-between items-center mb-8">
-          <div>
-            <h2 class="text-2xl font-bold mb-1">需求可测试性评估报告</h2>
-            <p class="text-xs opacity-60">
-              评估时间: {{ evalStore.currentReport.date || new Date().toLocaleString() }} • 
-              使用模型: {{ evalStore.currentReport.model_used || settings.model }}
-            </p>
-          </div>
-          <div class="text-center">
-            <div :class="['text-5xl font-black mb-1', getScoreColor(evalStore.currentReport.total_score || evalStore.currentReport.score)]">
-              {{ evalStore.currentReport.total_score || evalStore.currentReport.score }}
+      <!-- Report Header (Compact) -->
+      <div class="px-6 py-4 bg-gradient-to-r from-gray-900 to-blue-900 text-white flex justify-between items-center">
+        <div>
+          <h2 class="text-xl font-bold mb-0.5">需求可测试性评估报告</h2>
+          <p class="text-[10px] opacity-60">
+            评估时间: {{ evalStore.currentReport.date || new Date().toLocaleString() }} • 
+            使用模型: {{ evalStore.currentReport.model_used || settings.model }}
+          </p>
+        </div>
+        <div class="flex items-center gap-4">
+          <div class="text-right">
+            <div class="text-[10px] uppercase tracking-widest opacity-60 font-bold mb-1">总体评分</div>
+            <div class="text-[10px] font-bold px-2 py-0.5 rounded bg-white/10" :class="getScoreColor(evalStore.currentReport.total_score || evalStore.currentReport.score)">
+              {{ (evalStore.currentReport.total_score || evalStore.currentReport.score) >= 80 ? '优秀' : ((evalStore.currentReport.total_score || evalStore.currentReport.score) >= 60 ? '及格' : '待改进') }}
             </div>
-            <div class="text-[10px] uppercase tracking-widest opacity-60 font-bold">总体评分</div>
+          </div>
+          <div :class="['text-5xl font-black', getScoreColor(evalStore.currentReport.total_score || evalStore.currentReport.score)]">
+            {{ evalStore.currentReport.total_score || evalStore.currentReport.score }}
           </div>
         </div>
       </div>
 
       <!-- Report Content -->
-      <div class="p-8 space-y-10">
-        <!-- Referenced Baselines in Report -->
-        <div v-if="referencedBaselines.length > 0" class="bg-gray-50 p-6 rounded-3xl border border-gray-100">
-          <h4 class="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
-            <el-icon class="text-blue-500"><Connection /></el-icon> 本次评估引用基准
-          </h4>
-          <div class="grid grid-cols-2 gap-4">
-            <div 
-              v-for="base in referencedBaselines" 
-              :key="base.id"
-              class="bg-white p-3 rounded-2xl border border-gray-100 flex items-center justify-between"
-            >
-              <div class="flex items-center gap-3">
-                <div class="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600">
-                  <el-icon><Document /></el-icon>
-                </div>
-                <div>
-                  <p class="text-sm font-bold text-gray-700">{{ base.name }}</p>
-                   <p class="text-[10px] text-gray-400">评分: {{ base.score }}</p>
-                </div>
+      <div class="p-6 space-y-6">
+        
+        <!-- Dashboard Grid (1 Row) -->
+        <div class="grid grid-cols-4 gap-4">
+          <!-- Referenced Baselines -->
+          <div class="col-span-1 bg-gray-50 p-3 rounded-xl border border-gray-100 flex flex-col justify-center">
+            <p class="text-[10px] text-gray-400 font-bold uppercase mb-2 flex items-center gap-1">
+              <el-icon class="text-blue-500"><Connection /></el-icon> 引用基准
+            </p>
+            <div v-if="referencedBaselines.length > 0" class="space-y-1">
+              <div v-for="base in referencedBaselines" :key="base.id" class="flex items-center justify-between bg-white px-2 py-1 rounded-lg border border-gray-50">
+                <span class="text-xs font-bold text-gray-700 truncate max-w-[80px]">{{ base.name }}</span>
+                <el-button link size="small" type="primary" @click="$emit('previewFile', base)" class="text-[10px]">预览</el-button>
               </div>
-              <el-button link icon="View" @click="$emit('previewFile', base)">预览原文</el-button>
             </div>
+            <div v-else class="text-xs text-gray-400 font-medium px-1">未引用任何基准</div>
           </div>
-        </div>
 
-        <!-- Summary Statistics -->
-        <div class="grid grid-cols-3 gap-6 mb-8">
-          <div class="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+          <!-- Summary Stats -->
+          <div class="col-span-1 bg-gray-50 p-3 rounded-xl border border-gray-100 flex flex-col justify-center">
             <p class="text-[10px] text-gray-400 font-bold uppercase mb-1">选用标准</p>
             <p class="text-sm font-bold text-gray-700">{{ knowledgeStore.allSelectedFiles.length }} 项</p>
           </div>
-          <div class="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+          <div class="col-span-1 bg-gray-50 p-3 rounded-xl border border-gray-100 flex flex-col justify-center">
             <p class="text-[10px] text-gray-400 font-bold uppercase mb-1">评估深度</p>
             <p class="text-sm font-bold text-gray-700">标准评估</p>
           </div>
-          <div class="bg-gray-50 p-4 rounded-2xl border border-gray-100">
-            <p class="text-[10px] text-gray-400 font-bold uppercase mb-1">问题总数</p>
+          <div class="col-span-1 bg-red-50/50 p-3 rounded-xl border border-red-100 flex flex-col justify-center">
+            <p class="text-[10px] text-red-400 font-bold uppercase mb-1">问题总数</p>
             <div class="flex items-center gap-1">
-              <p class="text-sm font-bold text-red-500">{{ evalStore.currentReport.issues.length }} 个</p>
+              <p class="text-xl font-black text-red-600">{{ evalStore.currentReport.issues.length }} <span class="text-xs font-bold text-red-400">个</span></p>
               <el-icon class="text-red-500 text-xs"><Top /></el-icon>
             </div>
           </div>
         </div>
 
-        <!-- 多维度评分可视化（雷达图） -->
-        <section class="mb-8">
-          <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-            <el-icon class="text-blue-500"><DataAnalysis /></el-icon> 各维度评分分布
-          </h3>
+        <!-- Split View for Analysis & Details -->
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
           
-          <!-- 有维度数据时显示雷达图 -->
-          <RadarChart 
-            v-if="dimensionScores && Object.keys(dimensionScores).length > 0"
-            :dimension-scores="dimensionScores"
-            width="100%"
-            height="420px"
-            @chart-click="handleDimensionClick"
-          />
-          
-          <!-- 无维度数据时显示降级提示 -->
-          <div v-else class="bg-gradient-to-br from-gray-50 to-blue-50/30 rounded-2xl border border-gray-200 p-12 text-center">
-            <el-icon :size="56" class="text-gray-300 mb-3"><DataAnalysis /></el-icon>
-            <p class="text-base font-semibold text-gray-400 mb-2">暂无维度评分数据</p>
-            <p class="text-xs text-gray-400 max-w-md mx-auto leading-relaxed">
-              系统可能使用旧版本评估模型，或该次评估未启用多维度分析功能。
-              <br>建议升级评估引擎以获取更详细的维度评分报告。
-            </p>
-          </div>
-        </section>
+          <!-- Left Column: Visuals (35%) -->
+          <div class="md:col-span-5 space-y-4 sticky top-4">
+            <div class="bg-gray-50/50 rounded-2xl border border-gray-100 p-5">
+              <h3 class="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <el-icon class="text-blue-500"><DataAnalysis /></el-icon> 各维度评分分布
+              </h3>
+              
+              <!-- 雷达图容器 (限制高度) -->
+              <div class="h-[240px] relative">
+                <RadarChart 
+                  v-if="dimensionScores && Object.keys(dimensionScores).length > 0"
+                  :dimension-scores="dimensionScores"
+                  width="100%"
+                  height="100%"
+                  @chart-click="handleDimensionClick"
+                />
+                <div v-else class="absolute inset-0 flex flex-col items-center justify-center text-center">
+                  <el-icon :size="40" class="text-gray-300 mb-2"><DataAnalysis /></el-icon>
+                  <p class="text-xs font-semibold text-gray-400">暂无维度数据</p>
+                </div>
+              </div>
 
-        <!-- Issues Analysis -->
-        <section id="issues-analysis" class="scroll-mt-8">
-          <div class="flex justify-between items-center mb-4">
-            <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
-              <el-icon class="text-red-500"><Warning /></el-icon> 问题点分析
-            </h3>
+              <!-- 维度具体分数进度条 -->
+              <div v-if="dimensionScores" class="mt-6 space-y-3">
+                <div v-for="(val, key) in dimensionScores" :key="key" class="flex items-center gap-3 text-xs group cursor-pointer hover:bg-white p-1.5 -mx-1.5 rounded-lg transition-colors" @click="handleDimensionClick(key as string, val.score)">
+                   <span class="w-14 text-gray-600 font-medium truncate">{{ dimensionLabels[key] || key }}</span>
+                   <el-progress :percentage="val.score" :color="getScoreColorHash(val.score)" class="flex-1" :show-text="false" :stroke-width="6" />
+                   <span class="w-6 text-right font-black" :class="getScoreColorTextClass(val.score)">{{ val.score }}</span>
+                </div>
+              </div>
+            </div>
             
-            <!-- 维度选择状态 -->
-            <transition name="el-fade-in">
-              <div v-if="selectedDimension" class="flex items-center gap-2 bg-indigo-50 px-3 py-1.5 rounded-full border border-indigo-100">
-                <span class="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">当前视图:</span>
-                <span class="text-xs font-bold text-indigo-700">{{ dimensionLabels[selectedDimension] }}</span>
-                <el-button 
-                  link 
-                  :icon="Close" 
-                  class="p-0 h-auto text-indigo-400 hover:text-indigo-600"
-                  @click="clearFilter"
-                ></el-button>
+            <!-- 选中的维度评价详情 -->
+            <transition name="el-zoom-in-top">
+              <div v-if="selectedDimension && dimensionScores?.[selectedDimension]" class="p-4 bg-gradient-to-br from-indigo-50/80 to-white border border-indigo-100 rounded-2xl shadow-sm">
+                <div class="flex justify-between items-start mb-2">
+                  <h4 class="text-xs font-bold text-indigo-800 flex items-center gap-1.5">
+                    <el-icon><DataAnalysis /></el-icon> {{ dimensionLabels[selectedDimension] }} 诊断
+                  </h4>
+                  <el-button link :icon="Close" class="p-0 h-auto text-indigo-400" @click="clearFilter"></el-button>
+                </div>
+                <p class="text-[11px] text-indigo-900/80 leading-relaxed font-medium">
+                  {{ dimensionScores[selectedDimension].detail }}
+                </p>
               </div>
             </transition>
           </div>
 
-          <!-- 维度专属评价 (点击维度后在上方展示) -->
-          <transition name="el-zoom-in-top">
-            <div v-if="selectedDimension && dimensionScores?.[selectedDimension]" class="mb-6 p-5 bg-gradient-to-br from-indigo-50/80 to-white border border-indigo-100 rounded-2xl shadow-sm">
-              <h4 class="text-sm font-bold text-indigo-800 mb-3 flex items-center gap-2">
-                <el-icon><DataAnalysis /></el-icon> {{ dimensionLabels[selectedDimension] }} - 维度综合诊断
-              </h4>
-              <p class="text-sm text-indigo-900/80 leading-relaxed font-medium">
-                {{ dimensionScores[selectedDimension].detail }}
-              </p>
-            </div>
-          </transition>
-
-          <div class="space-y-3">
-            <div 
-              v-for="(issue, i) in evalStore.currentReport.issues" 
-              :key="i"
-              class="p-4 bg-red-50/30 border-l-4 border-red-400 rounded-r-xl flex gap-3 transition-all duration-300 hover:shadow-md"
-              :class="{ 'opacity-100 scale-100': !selectedDimension || issue.includes(dimensionLabels[selectedDimension]), 'opacity-50 grayscale-[0.5]': selectedDimension && !issue.includes(dimensionLabels[selectedDimension]) }"
-            >
-              <span class="text-red-500 font-bold">{{ (Number(i) + 1).toString().padStart(2, '0') }}</span>
-              <p class="text-sm text-gray-700 leading-relaxed">{{ issue }}</p>
-              
-              <!-- 命中标注 -->
-              <div v-if="selectedDimension && issue.includes(dimensionLabels[selectedDimension])" class="ml-auto">
-                <el-tag size="small" type="danger" effect="light" round class="opacity-80">关联缺陷</el-tag>
+          <!-- Right Column: Actionable Insights (65%) -->
+          <div class="md:col-span-7 space-y-6">
+            
+            <!-- Issues Accordion -->
+            <section id="issues-analysis" class="scroll-mt-8">
+              <div class="flex justify-between items-end mb-3 px-1">
+                <h3 class="text-sm font-bold text-gray-800 flex items-center gap-2">
+                  <el-icon class="text-red-500"><Warning /></el-icon> 发现的缺陷
+                </h3>
               </div>
-            </div>
-          </div>
-        </section>
 
-        <!-- Optimization Suggestions -->
-        <section>
-          <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-            <el-icon class="text-green-500"><CircleCheck /></el-icon> 优化改进建议
-          </h3>
-          <div class="p-6 bg-green-50/30 border border-green-100 rounded-2xl">
-            <p class="text-sm text-gray-700 leading-relaxed italic">
-              {{ evalStore.currentReport.suggestions }}
-            </p>
+              <!-- 使用 el-collapse 压缩垂直空间 -->
+              <el-collapse accordion class="border-none space-y-2">
+                <el-collapse-item 
+                  v-for="(issue, i) in evalStore.currentReport.issues" 
+                  :key="i"
+                  :name="i"
+                  class="bg-white border border-gray-100 rounded-xl overflow-hidden transition-opacity duration-300 shadow-sm [&_.el-collapse-item__header]:border-b-0 [&_.el-collapse-item__header]:h-auto [&_.el-collapse-item__header]:py-3 [&_.el-collapse-item__header]:px-4 [&_.el-collapse-item__wrap]:border-b-0"
+                >
+                  <template #title>
+                    <div class="flex items-start gap-2.5 max-w-[95%]">
+                      <span class="text-red-500 font-bold mt-[1px] text-xs bg-red-50 px-1.5 py-0.5 rounded">{{ (Number(i) + 1).toString().padStart(2, '0') }}</span>
+                      <!-- 取问题第一句作为标题 -->
+                      <span class="text-xs text-gray-700 leading-snug font-semibold text-left line-clamp-2 pr-4">
+                        {{ issue.split(/[。！？]/)[0] }}
+                      </span>
+                    </div>
+                  </template>
+                  <div class="px-4 pb-4 pt-1">
+                     <div class="text-[11px] text-gray-600 leading-relaxed bg-gray-50/80 p-3 rounded-lg border border-gray-100 whitespace-pre-wrap">
+                       {{ issue }}
+                     </div>
+                  </div>
+                </el-collapse-item>
+              </el-collapse>
+            </section>
+
+            <!-- Optimization Suggestions -->
+            <section v-if="evalStore.currentReport.suggestions">
+              <h3 class="text-sm font-bold text-gray-800 mb-3 px-1 flex items-center gap-2">
+                <el-icon class="text-green-500"><CircleCheck /></el-icon> 优化改进建议
+              </h3>
+              <div class="p-5 bg-green-50/50 border border-green-100 rounded-xl shadow-sm">
+                <p class="text-[11px] text-gray-700 leading-relaxed italic whitespace-pre-wrap">
+                  {{ evalStore.currentReport.suggestions }}
+                </p>
+              </div>
+            </section>
+
           </div>
-        </section>
+        </div>
       </div>
       
       <!-- Report Footer -->
@@ -250,5 +257,17 @@ const getScoreColor = (score: number) => {
   if (score >= 80) return 'text-green-400';
   if (score >= 60) return 'text-orange-400';
   return 'text-red-400';
+};
+
+const getScoreColorHash = (score: number) => {
+  if (score >= 80) return '#4ade80'; // green-400
+  if (score >= 60) return '#fb923c'; // orange-400
+  return '#f87171'; // red-400
+};
+
+const getScoreColorTextClass = (score: number) => {
+  if (score >= 80) return 'text-green-500';
+  if (score >= 60) return 'text-orange-500';
+  return 'text-red-500';
 };
 </script>
