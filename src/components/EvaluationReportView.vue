@@ -74,37 +74,15 @@
               📎 {{ normalizeIssue(rawIssue).affected_card.title }}: {{ normalizeIssue(rawIssue).affected_card.snippet }}
             </div>
             <div v-if="normalizeIssue(rawIssue).references && normalizeIssue(rawIssue).references.length > 0" class="flex flex-wrap gap-1">
-              <el-tooltip
+              <el-tag
                 v-for="(ref, ri) in normalizeIssue(rawIssue).references" :key="ri"
-                placement="top"
-                :show-after="300"
+                size="small"
+                :type="ref.type === 'smell' ? 'danger' : 'primary'"
                 effect="light"
+                class="!text-[9px]"
               >
-                <template #content>
-                  <div style="max-width: 360px;">
-                    <div v-if="ref.type === 'smell' && ref.priority" style="margin-bottom: 4px;">
-                      <span style="display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;"
-                        :style="{
-                          background: ref.priority === 'high' ? '#fee2e2' : ref.priority === 'low' ? '#f1f5f9' : '#fef3c7',
-                          color: ref.priority === 'high' ? '#991b1b' : ref.priority === 'low' ? '#475569' : '#92400e'
-                        }">
-                        {{ ref.priority === 'high' ? '高(严重)' : ref.priority === 'low' ? '低(轻微)' : '中(一般)' }}
-                      </span>
-                    </div>
-                    <div style="font-size: 12px; line-height: 1.6; color: #374151;">
-                      {{ ref.snippet || ref.name || '无详情' }}
-                    </div>
-                  </div>
-                </template>
-                <el-tag
-                  size="small"
-                  :type="ref.type === 'smell' ? 'danger' : 'primary'"
-                  effect="light"
-                  class="!text-[9px] cursor-help"
-                >
-                  {{ ref.type === 'smell' ? '异味' : '标准' }}: {{ ref.name }}
-                </el-tag>
-              </el-tooltip>
+                {{ ref.type === 'smell' ? '异味' : '标准' }}: {{ ref.name }}
+              </el-tag>
             </div>
           </div>
         </div>
