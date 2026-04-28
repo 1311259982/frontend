@@ -173,55 +173,34 @@
                          <el-icon :size="10"><Link /></el-icon>
                          引用来源
                        </div>
-                       <el-tooltip
+                      <div
                         v-for="(ref, ri) in normalizeIssue(rawIssue).references" :key="ri"
-                        placement="top"
-                        :show-after="300"
-                        effect="light"
+                        class="flex items-start gap-2 text-[11px] p-2 rounded-lg"
+                        :class="ref.type === 'smell' ? 'bg-red-50/50 border border-red-100/60' : 'bg-blue-50/50 border border-blue-100/60'"
                       >
-                        <template #content>
-                          <div style="max-width: 360px;">
-                            <div v-if="ref.type === 'smell' && ref.priority" style="margin-bottom: 4px;">
-                              <span style="display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;"
-                                :style="{
-                                  background: ref.priority === 'high' ? '#fee2e2' : ref.priority === 'low' ? '#f1f5f9' : '#fef3c7',
-                                  color: ref.priority === 'high' ? '#991b1b' : ref.priority === 'low' ? '#475569' : '#92400e'
-                                }">
-                                {{ ref.priority === 'high' ? '高(严重)' : ref.priority === 'low' ? '低(轻微)' : '中(一般)' }}
-                              </span>
-                            </div>
-                            <div style="font-size: 12px; line-height: 1.6; color: #374151;">
-                              {{ ref.snippet || ref.name || '无详情' }}
-                            </div>
-                          </div>
-                        </template>
-                        <div class="flex items-start gap-2 text-[11px] p-2 rounded-lg cursor-help"
-                          :class="ref.type === 'smell' ? 'bg-red-50/50 border border-red-100/60' : 'bg-blue-50/50 border border-blue-100/60'"
+                        <el-tag 
+                          size="small" 
+                          :type="ref.type === 'smell' ? 'danger' : 'primary'" 
+                          effect="light"
+                          class="!text-[9px] !px-1 !py-0 shrink-0"
                         >
-                          <el-tag 
-                            size="small" 
-                            :type="ref.type === 'smell' ? 'danger' : 'primary'" 
-                            effect="light"
-                            class="!text-[9px] !px-1 !py-0 shrink-0"
-                          >
-                            {{ ref.type === 'smell' ? '异味' : '标准' }}
-                          </el-tag>
-                          <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-1.5 mb-0.5">
-                              <span class="font-semibold" :class="ref.type === 'smell' ? 'text-red-700' : 'text-blue-700'">{{ ref.name }}</span>
-                              <el-tag v-if="ref.type === 'smell' && ref.priority" 
-                                size="small" 
-                                :type="ref.priority === 'high' ? 'danger' : ref.priority === 'low' ? 'info' : 'warning'"
-                                effect="dark"
-                                class="!text-[8px] !px-1 !py-0 !h-4"
-                              >
-                                {{ ref.priority === 'high' ? '高(严重)' : ref.priority === 'low' ? '低(轻微)' : '中(一般)' }}
-                              </el-tag>
-                            </div>
-                            <div class="text-gray-800 leading-relaxed">{{ ref.snippet }}</div>
+                          {{ ref.type === 'smell' ? '异味' : '标准' }}
+                        </el-tag>
+                        <div class="flex-1 min-w-0">
+                          <div class="flex items-center gap-1.5 mb-0.5">
+                            <span class="font-semibold" :class="ref.type === 'smell' ? 'text-red-700' : 'text-blue-700'">{{ ref.name }}</span>
+                            <el-tag v-if="ref.type === 'smell' && ref.priority" 
+                              size="small" 
+                              :type="ref.priority === 'high' ? 'danger' : ref.priority === 'low' ? 'info' : 'warning'"
+                              effect="dark"
+                              class="!text-[8px] !px-1 !py-0 !h-4"
+                            >
+                              {{ ref.priority === 'high' ? '高(严重)' : ref.priority === 'low' ? '低(轻微)' : '中(一般)' }}
+                            </el-tag>
                           </div>
+                          <div class="text-gray-800 leading-relaxed">{{ ref.snippet }}</div>
                         </div>
-                      </el-tooltip>
+                      </div>
                      </div>
                   </div>
                 </el-collapse-item>
