@@ -1,5 +1,5 @@
 <template>
-  <div v-if="evalStore.currentReport" class="max-w-4xl mx-auto space-y-8 pb-24">
+  <div v-if="evalStore.currentReport" id="report-content" class="max-w-4xl mx-auto space-y-8 pb-24">
     <div class="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
       <!-- Report Header (Compact) -->
       <div class="px-6 py-4 bg-gradient-to-r from-gray-900 to-blue-900 text-white flex justify-between items-center">
@@ -74,6 +74,7 @@
               <div class="h-[240px] relative">
                 <RadarChart 
                   v-if="dimensionScores && Object.keys(dimensionScores).length > 0"
+                  ref="radarChartRef"
                   :dimension-scores="dimensionScores"
                   width="100%"
                   height="100%"
@@ -125,7 +126,7 @@
               <!-- 使用 el-collapse 压缩垂直空间 -->
               <el-collapse accordion class="border-none space-y-2">
                 <el-collapse-item 
-                  v-for="(issue, i) in evalStore.currentReport.issues" 
+                  v-for="(rawIssue, i) in evalStore.currentReport.issues" 
                   :key="i"
                   :name="i"
                   class="bg-white border border-gray-100 rounded-xl overflow-hidden transition-opacity duration-300 shadow-sm [&_.el-collapse-item__header]:border-b-0 [&_.el-collapse-item__header]:h-auto [&_.el-collapse-item__header]:py-3 [&_.el-collapse-item__header]:px-4 [&_.el-collapse-item__wrap]:border-b-0"
@@ -133,15 +134,74 @@
                   <template #title>
                     <div class="flex items-start gap-2.5 max-w-[95%]">
                       <span class="text-red-500 font-bold mt-[1px] text-xs bg-red-50 px-1.5 py-0.5 rounded">{{ (Number(i) + 1).toString().padStart(2, '0') }}</span>
-                      <!-- 取问题第一句作为标题 -->
-                      <span class="text-xs text-gray-700 leading-snug font-semibold text-left line-clamp-2 pr-4">
-                        {{ issue.split(/[。！？]/)[0] }}
+                      <el-tooltip
+                        v-if="normalizeIssue(rawIssue).affected_card"
+                        placement="top"
+                        :show-after="300"
+                      >
+                        <template #content>
+                          <div style="max-width: 300px;">
+                            <div style="font-weight: 600; margin-bottom: 4px;">{{ normalizeIssue(rawIssue).affected_card.title }}</div>
+                            <div style="font-size: 12px; line-height: 1.5; color: #d97706;">{{ normalizeIssue(rawIssue).affected_card.snippet }}</div>
+                          </div>
+                        </template>
+                        <span class="text-xs text-gray-700 leading-snug font-semibold text-left line-clamp-2 pr-4 cursor-help" style="text-decoration: underline dotted; text-underline-offset: 3px;">
+                          {{ normalizeIssue(rawIssue).description.split(/[。！？]/)[0] }}
+                        </span>
+                      </el-tooltip>
+                      <span v-else class="text-xs text-gray-700 leading-snug font-semibold text-left line-clamp-2 pr-4">
+                        {{ normalizeIssue(rawIssue).description.split(/[。！？]/)[0] }}
                       </span>
                     </div>
                   </template>
-                  <div class="px-4 pb-4 pt-1">
+                  <div class="px-4 pb-4 pt-1 space-y-3">
                      <div class="text-[11px] text-gray-600 leading-relaxed bg-gray-50/80 p-3 rounded-lg border border-gray-100 whitespace-pre-wrap">
-                       {{ issue }}
+                       {{ normalizeIssue(rawIssue).description }}
+                     </div>
+                     
+                     <div v-if="normalizeIssue(rawIssue).affected_card" class="bg-amber-50/60 border border-amber-200/60 rounded-lg p-3">
+                       <div class="flex items-center gap-1.5 mb-1.5">
+                         <el-icon class="text-amber-500" :size="12"><Document /></el-icon>
+                         <span class="text-[10px] font-bold text-amber-700 uppercase tracking-wider">关联需求</span>
+                       </div>
+                       <div class="text-[11px] text-amber-900 font-semibold mb-1">{{ normalizeIssue(rawIssue).affected_card.title }}</div>
+                       <div class="text-[11px] text-amber-800/80 leading-relaxed bg-amber-100/40 px-2 py-1.5 rounded border-l-2 border-amber-400">
+                         {{ normalizeIssue(rawIssue).affected_card.snippet }}
+                       </div>
+                     </div>
+                     
+                     <div v-if="normalizeIssue(rawIssue).references && normalizeIssue(rawIssue).references.length > 0" class="space-y-1.5">
+                       <div class="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
+                         <el-icon :size="10"><Link /></el-icon>
+                         引用来源
+                       </div>
+                       <div v-for="(ref, ri) in normalizeIssue(rawIssue).references" :key="ri"
+                         class="flex items-start gap-2 text-[11px] p-2 rounded-lg"
+                         :class="ref.type === 'smell' ? 'bg-red-50/50 border border-red-100/60' : 'bg-blue-50/50 border border-blue-100/60'"
+                       >
+                         <el-tag 
+                           size="small" 
+                           :type="ref.type === 'smell' ? 'danger' : 'primary'" 
+                           effect="light"
+                           class="!text-[9px] !px-1 !py-0 shrink-0"
+                         >
+                           {{ ref.type === 'smell' ? '异味' : '标准' }}
+                         </el-tag>
+                         <div class="flex-1 min-w-0">
+                           <div class="flex items-center gap-1.5 mb-0.5">
+                             <span class="font-semibold" :class="ref.type === 'smell' ? 'text-red-700' : 'text-blue-700'">{{ ref.name }}</span>
+                             <el-tag v-if="ref.type === 'smell' && ref.priority" 
+                               size="small" 
+                               :type="ref.priority === 'high' ? 'danger' : ref.priority === 'low' ? 'info' : 'warning'"
+                               effect="dark"
+                               class="!text-[8px] !px-1 !py-0 !h-4"
+                             >
+                               {{ ref.priority === 'high' ? '严重' : ref.priority === 'low' ? '轻微' : '一般' }}
+                             </el-tag>
+                           </div>
+                           <div class="text-gray-600 leading-relaxed">{{ ref.snippet }}</div>
+                         </div>
+                       </div>
                      </div>
                   </div>
                 </el-collapse-item>
@@ -167,7 +227,7 @@
       <!-- Report Footer -->
       <div class="p-6 bg-gray-50 border-t border-gray-100 flex justify-between items-center">
         <div class="flex gap-2">
-          <el-button type="primary" plain icon="Download">导出 PDF 报告</el-button>
+          <el-button type="primary" plain :icon="Download" :loading="isExporting" @click="exportPDF">导出 PDF 报告</el-button>
           <el-button v-if="evalStore.referencedBaselineIds.length > 0" type="primary" icon="Plus" @click="$emit('continueSupplementing')">基于本次结果继续补充需求</el-button>
         </div>
         <div class="flex gap-2">
@@ -182,8 +242,9 @@
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue';
 import { useEvaluationStore, useKnowledgeStore, useBaselineStore } from '@/store';
-import { Connection, Document, View, Top, Warning, CircleCheck, Download, Plus, Refresh, ChatDotRound, DataAnalysis, Close } from '@element-plus/icons-vue';
+import { Connection, Document, View, Top, Warning, CircleCheck, Download, Plus, Refresh, ChatDotRound, DataAnalysis, Close, Link } from '@element-plus/icons-vue';
 import RadarChart from '@/components/RadarChart.vue';
+import { generatePdfTemplate, type PdfTemplateData } from '@/utils/pdfTemplate';
 
 defineProps<{ settings: { model: string } }>();
 defineEmits(['previewFile', 'continueSupplementing', 'restart']);
@@ -194,6 +255,15 @@ const baselineStore = useBaselineStore();
 
 // 当前选中的过滤维度
 const selectedDimension = ref<string | null>(null);
+const isExporting = ref(false);
+const radarChartRef = ref<InstanceType<typeof RadarChart> | null>(null);
+
+function normalizeIssue(issue: any) {
+  if (typeof issue === 'string') {
+    return { description: issue, affected_card: null, references: [] };
+  }
+  return issue;
+}
 
 const dimensionLabels: Record<string, string> = {
   completeness: '完整性',
@@ -229,8 +299,7 @@ const filteredIssues = computed(() => {
   if (!selectedDimension.value) return allIssues;
   
   const label = dimensionLabels[selectedDimension.value];
-  // 简单逻辑：检查问题文本中是否包含维度名称
-  return allIssues.filter((issue: string) => issue.includes(label));
+  return allIssues.filter((rawIssue: any) => normalizeIssue(rawIssue).description.includes(label));
 });
 
 /**
@@ -253,6 +322,157 @@ function clearFilter() {
   selectedDimension.value = null;
 }
 
+function getRadarImageDataURL(): string | null {
+  try {
+    const chartComponent = radarChartRef.value as any;
+    const echartsInstance = chartComponent?.chartRef?.chart;
+    if (echartsInstance && typeof echartsInstance.getDataURL === 'function') {
+      return echartsInstance.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#ffffff' });
+    }
+  } catch (e) {
+    console.warn('[PDF Export] Failed to get radar chart image:', e);
+  }
+  return null;
+}
+
+async function exportPDF() {
+  if (!evalStore.currentReport || isExporting.value) return;
+
+  isExporting.value = true;
+
+  try {
+    const { default: html2canvas } = await import('html2canvas');
+    const { default: jsPDF } = await import('jspdf');
+
+    const report = evalStore.currentReport;
+    const radarDataURL = getRadarImageDataURL();
+
+    const changedItems = (evalStore.items || [])
+      .filter((item: any) => item.status === 'new' || item.status === 'modified' || item.status === 'deleted')
+      .map((item: any) => ({ title: item.title || '', status: item.status }));
+
+    const issues = (report.issues || []).map((rawIssue: any) => {
+      const issue = normalizeIssue(rawIssue);
+      return {
+        description: issue.description || '',
+        affected_card: issue.affected_card || null,
+        references: issue.references || [],
+      };
+    });
+
+    const currentVersion = (() => {
+      const projectName = evalStore.projectName || '未命名项目';
+      const match = evalStore.history.find(
+        (h: any) => (h.projectName === projectName || h.project_name === projectName) && !h.is_archived
+      );
+      return match?.version || 'V1.0';
+    })();
+
+    const templateData: PdfTemplateData = {
+      projectName: evalStore.projectName || '未命名项目',
+      version: currentVersion,
+      date: report.date || new Date().toISOString().split('T')[0],
+      model: report.model_used || 'Unknown',
+      totalScore: report.total_score || report.score || 0,
+      changedItems,
+      dimensionScores: report.dimension_scores || null,
+      radarImageDataURL: radarDataURL,
+      issues,
+      suggestions: report.suggestions || '',
+      standardsCount: knowledgeStore.allSelectedFiles.length,
+    };
+
+    const htmlString = generatePdfTemplate(templateData);
+
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position: fixed; left: -9999px; top: 0; width: 794px; height: 1200px; border: none; z-index: -1;';
+    document.body.appendChild(iframe);
+
+    const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!iframeDoc) {
+      document.body.removeChild(iframe);
+      isExporting.value = false;
+      return;
+    }
+
+    iframeDoc.open();
+    iframeDoc.write(htmlString);
+    iframeDoc.close();
+
+    await new Promise<void>(resolve => {
+      const checkReady = () => {
+        if (iframeDoc.readyState === 'complete') {
+          resolve();
+        } else {
+          setTimeout(checkReady, 100);
+        }
+      };
+      checkReady();
+    });
+
+    await new Promise(resolve => setTimeout(resolve, 300));
+
+    const renderTarget = iframeDoc.body.firstElementChild as HTMLElement;
+    if (!renderTarget) {
+      document.body.removeChild(iframe);
+      isExporting.value = false;
+      return;
+    }
+
+    const canvas = await html2canvas(renderTarget, {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      width: 794,
+      windowWidth: 794,
+    });
+
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+    const pdf = new jsPDF('portrait', 'mm', 'a4');
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfPageHeight = pdf.internal.pageSize.getHeight();
+    const imgWidth = pdfWidth;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+    if (imgHeight <= pdfPageHeight) {
+      pdf.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
+    } else {
+      let remainingHeight = imgHeight;
+      let srcY = 0;
+      let page = 0;
+
+      while (remainingHeight > 0) {
+        if (page > 0) pdf.addPage();
+        const sliceH = Math.min(remainingHeight, pdfPageHeight);
+        const canvasSlice = document.createElement('canvas');
+        canvasSlice.width = canvas.width;
+        canvasSlice.height = (sliceH / imgHeight) * canvas.height;
+        const sliceCtx = canvasSlice.getContext('2d');
+        if (sliceCtx) {
+          sliceCtx.fillStyle = '#ffffff';
+          sliceCtx.fillRect(0, 0, canvasSlice.width, canvasSlice.height);
+          sliceCtx.drawImage(canvas, 0, srcY, canvas.width, canvasSlice.height, 0, 0, canvas.width, canvasSlice.height);
+        }
+        const sliceData = canvasSlice.toDataURL('image/jpeg', 0.95);
+        pdf.addImage(sliceData, 'JPEG', 0, 0, imgWidth, sliceH);
+        srcY += canvasSlice.height;
+        remainingHeight -= sliceH;
+        page++;
+      }
+    }
+
+    const projectName = evalStore.projectName || '未命名项目';
+    const date = new Date().toISOString().split('T')[0];
+    pdf.save(`评估报告_${projectName}_${date}.pdf`);
+
+    document.body.removeChild(iframe);
+  } catch (e) {
+    console.error('[PDF Export]', e);
+  } finally {
+    isExporting.value = false;
+  }
+}
+
 const getScoreColor = (score: number) => {
   if (score >= 80) return 'text-green-400';
   if (score >= 60) return 'text-orange-400';
@@ -271,3 +491,10 @@ const getScoreColorTextClass = (score: number) => {
   return 'text-red-500';
 };
 </script>
+
+<style>
+@media print {
+  .el-collapse-item__header { break-inside: avoid; }
+  .el-collapse-item__wrap { break-inside: avoid; }
+}
+</style>

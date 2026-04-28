@@ -62,12 +62,27 @@
         </h3>
         <div class="space-y-2">
           <div 
-            v-for="(issue, i) in report.issues" 
+            v-for="(rawIssue, i) in report.issues" 
             :key="i"
-            class="p-3 bg-red-50/50 border-l-2 border-red-400 text-xs text-gray-700 leading-relaxed rounded-r-lg"
+            class="p-3 bg-red-50/50 border-l-2 border-red-400 text-xs text-gray-700 leading-relaxed rounded-r-lg space-y-1.5"
           >
-            <span class="font-bold text-red-500 mr-1">{{ Number(i) + 1 }}.</span>
-            {{ issue }}
+            <div>
+              <span class="font-bold text-red-500 mr-1">{{ Number(i) + 1 }}.</span>
+              {{ normalizeIssue(rawIssue).description }}
+            </div>
+            <div v-if="normalizeIssue(rawIssue).affected_card" class="text-[10px] text-amber-700 bg-amber-50/60 px-2 py-1 rounded border-l border-amber-300">
+              📎 {{ normalizeIssue(rawIssue).affected_card.title }}: {{ normalizeIssue(rawIssue).affected_card.snippet }}
+            </div>
+            <div v-if="normalizeIssue(rawIssue).references && normalizeIssue(rawIssue).references.length > 0" class="flex flex-wrap gap-1">
+              <el-tag v-for="(ref, ri) in normalizeIssue(rawIssue).references" :key="ri"
+                size="small"
+                :type="ref.type === 'smell' ? 'danger' : 'primary'"
+                effect="light"
+                class="!text-[9px]"
+              >
+                {{ ref.type === 'smell' ? '异味' : '标准' }}: {{ ref.name }}
+              </el-tag>
+            </div>
           </div>
         </div>
       </section>
@@ -99,6 +114,13 @@ const props = defineProps<{
 }>()
 
 console.log('[EvaluationReportView] Received report:', props.report)
+
+function normalizeIssue(issue: any) {
+  if (typeof issue === 'string') {
+    return { description: issue, affected_card: null, references: [] };
+  }
+  return issue;
+}
 
 const getScoreColor = (score: number) => {
   if (score >= 80) return 'text-green-400'
