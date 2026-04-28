@@ -225,15 +225,15 @@ function renderIssues(data: PdfTemplateData): string {
                   ? (() => {
                       let pBg = '#fef3c7';
                       let pColor = '#92400e';
-                      let pText = '一般';
+                      let pText = '中(一般)';
                       if (ref.priority === 'high') {
                         pBg = '#fee2e2';
                         pColor = '#991b1b';
-                        pText = '严重';
+                        pText = '高(严重)';
                       } else if (ref.priority === 'low') {
                         pBg = '#f1f5f9';
                         pColor = '#475569';
-                        pText = '轻微';
+                        pText = '低(轻微)';
                       }
                       return `<span style="display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 9px; font-weight: 700; background: ${pBg}; color: ${pColor}; margin-left: 6px;">${pText}</span>`;
                     })()

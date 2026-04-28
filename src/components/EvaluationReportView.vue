@@ -88,7 +88,7 @@
                           background: ref.priority === 'high' ? '#fee2e2' : ref.priority === 'low' ? '#f1f5f9' : '#fef3c7',
                           color: ref.priority === 'high' ? '#991b1b' : ref.priority === 'low' ? '#475569' : '#92400e'
                         }">
-                        {{ ref.priority === 'high' ? '严重' : ref.priority === 'low' ? '轻微' : '一般' }}
+                        {{ ref.priority === 'high' ? '高(严重)' : ref.priority === 'low' ? '低(轻微)' : '中(一般)' }}
                       </span>
                     </div>
                     <div style="font-size: 12px; line-height: 1.6; color: #374151;">
