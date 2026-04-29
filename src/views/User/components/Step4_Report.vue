@@ -264,6 +264,7 @@ const baselineStore = useBaselineStore();
 const expandedIssue = ref<number | string | null>(null);
 const isExporting = ref(false);
 const radarChartRef = ref<InstanceType<typeof RadarChart> | null>(null);
+const selectedDimension = ref<string | null>(null);
 
 function normalizeIssue(issue: any) {
   if (typeof issue === 'string') {

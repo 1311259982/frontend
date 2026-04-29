@@ -370,14 +370,8 @@ function handleChartClick(params: any): void {
   let clickedDimension = ''
   let clickedScore = 0
 
-  // 情况1：点击的是雷达图中的数据点或面积区域
-  if (params.componentType === 'series') {
-    const dimensions = Object.keys(props.dimensionScores!)
-    clickedDimension = dimensions[params.dataIndex]
-    clickedScore = props.dimensionScores![clickedDimension].score
-  } 
-  // 情况2：点击的是雷达图周边的维度名称（坐标轴标签）
-  else if (params.componentType === 'radar') {
+  // 点击的是雷达图周边的维度名称（坐标轴标签）
+  if (params.componentType === 'radar') {
     const labelName = params.name
     // 通过中文标签名反查英文 key
     const dimensionEntry = Object.entries(dimensionLabels).find(([_, label]) => label === labelName)
