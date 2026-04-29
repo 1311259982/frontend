@@ -19,52 +19,50 @@
 
 ## 项目结构
 
-```plantuml
-@startwbs
-* src
-** main.ts
-** App.vue
-** index.css
-** vite-env.d.ts
-** router
-*** index.ts
-** services
-*** api.ts
-*** mock.ts
-*** index.ts
-** store
-*** index.ts
-** views
-*** Login.vue
-*** Admin.vue
-*** BaselineDetail.vue
-*** User
-**** index.vue
-**** components
-***** AppHeader.vue
-***** SidebarLeft.vue
-***** SidebarRight.vue
-***** RequirementInput.vue
-***** Step1_Guide.vue
-***** Step4_Report.vue
-***** EvaluationLoading.vue
-***** BaselineDrawer.vue
-***** StandardPreviewDialog.vue
-***** MainFooter.vue
-**** composables
-***** useEvaluationTask.ts
-***** useBaselineActions.ts
-***** useSidebarLayout.ts
-** components
-*** EvaluationReportView.vue
-*** RadarChart.vue
-*** ParentDiffText.vue
-*** LiveDiffEditor.vue
-*** DiffItemCard.vue
-*** TextDiff.vue
-** utils
-*** pdfTemplate.ts
-@endwbs
+```text
+src/
+├── main.ts                          # 入口文件 (Pinia, Router, ElementPlus 注册)
+├── App.vue                          # 根组件 (router-view 容器)
+├── index.css                        # 全局样式 (Tailwind CSS 引入)
+├── vite-env.d.ts                    # Vite 环境类型声明
+├── router/
+│   └── index.ts                     # 路由配置 (含导航守卫, 角色鉴权)
+├── services/                        # 服务层 (API 调用与模拟数据)
+│   ├── api.ts                       # 真实 HTTP 请求 (Axios, 拦截器, 全部 API 方法)
+│   ├── mock.ts                      # 模拟数据服务 (前端独立运行时的假数据)
+│   └── index.ts                     # 统一入口 (根据 VITE_USE_MOCK 切换)
+├── store/
+│   └── index.ts                     # Pinia 状态管理 (6 个 Store)
+├── views/
+│   ├── Login.vue                    # 登录/注册页面
+│   ├── Admin.vue                    # 管理后台 (模型配置, 标准/异味管理, 提示词配置)
+│   ├── BaselineDetail.vue           # 基准版本详情页 (版本对比, 积木块查看, Diff)
+│   └── User/                        # 用户主工作台
+│       ├── index.vue                # 主页面 (四步流程编排)
+│       ├── components/
+│       │   ├── AppHeader.vue        # 顶部导航栏 (用户信息, 退出)
+│       │   ├── SidebarLeft.vue      # 左侧边栏 (评估标准/异味/基准 标签切换)
+│       │   ├── SidebarRight.vue     # 右侧边栏 (基准需求树)
+│       │   ├── RequirementInput.vue # 需求输入区 (文本/文档模式, 卡片编辑器)
+│       │   ├── Step1_Guide.vue      # 步骤1: 选择评估模式
+│       │   ├── Step4_Report.vue     # 步骤4: 评估报告展示
+│       │   ├── EvaluationLoading.vue # 评估进行中加载动画
+│       │   ├── BaselineDrawer.vue   # 基准需求抽屉 (详情/对比)
+│       │   ├── StandardPreviewDialog.vue # 标准文件预览弹窗
+│       │   └── MainFooter.vue       # 底部信息栏
+│       └── composables/
+│           ├── useEvaluationTask.ts  # 评估任务逻辑 (草稿/提交/轮询/归档)
+│           ├── useBaselineActions.ts # 基准操作逻辑 (选择/取消/删除预览)
+│           └── useSidebarLayout.ts   # 侧边栏布局逻辑 (宽度/折叠)
+├── components/                      # 通用组件
+│   ├── EvaluationReportView.vue     # 评估报告通用展示组件
+│   ├── RadarChart.vue               # 雷达图评分组件
+│   ├── ParentDiffText.vue           # 父版本文本差异组件
+│   ├── LiveDiffEditor.vue           # 实时差异编辑器
+│   ├── DiffItemCard.vue             # 差异项卡片组件
+│   └── TextDiff.vue                 # 文本差异对比组件
+└── utils/
+    └── pdfTemplate.ts               # PDF 导出模板
 ```
 
 ## 快速开始
