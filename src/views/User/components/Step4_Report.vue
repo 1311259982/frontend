@@ -124,7 +124,7 @@
               </div>
 
               <!-- 使用 el-collapse 压缩垂直空间 -->
-              <el-collapse accordion class="border-none space-y-2">
+              <el-collapse accordion class="border-none space-y-2" v-model="expandedIssue">
                 <el-collapse-item 
                   v-for="(rawIssue, i) in evalStore.currentReport.issues" 
                   :key="i"
@@ -146,11 +146,19 @@
                             <div style="font-size: 12px; line-height: 1.5; color: #d97706;">{{ normalizeIssue(rawIssue).affected_card.snippet }}</div>
                           </div>
                         </template>
-                        <span class="text-xs text-gray-700 leading-snug font-semibold text-left line-clamp-2 pr-4 cursor-help" style="text-decoration: underline dotted; text-underline-offset: 3px;">
+                        <span 
+                          class="text-xs text-gray-700 leading-snug font-semibold text-left pr-4 cursor-help" 
+                          :class="expandedIssue === i ? '' : 'line-clamp-2'"
+                          style="text-decoration: underline dotted; text-underline-offset: 3px;"
+                        >
                           {{ normalizeIssue(rawIssue).description.split(/[。！？]/)[0] }}
                         </span>
                       </el-tooltip>
-                      <span v-else class="text-xs text-gray-700 leading-snug font-semibold text-left line-clamp-2 pr-4">
+                      <span 
+                        v-else 
+                        class="text-xs text-gray-700 leading-snug font-semibold text-left pr-4"
+                        :class="expandedIssue === i ? '' : 'line-clamp-2'"
+                      >
                         {{ normalizeIssue(rawIssue).description.split(/[。！？]/)[0] }}
                       </span>
                     </div>
@@ -252,8 +260,8 @@ const evalStore = useEvaluationStore();
 const knowledgeStore = useKnowledgeStore();
 const baselineStore = useBaselineStore();
 
-// 当前选中的过滤维度
-const selectedDimension = ref<string | null>(null);
+// 当前展开的缺陷项
+const expandedIssue = ref<number | string | null>(null);
 const isExporting = ref(false);
 const radarChartRef = ref<InstanceType<typeof RadarChart> | null>(null);
 

@@ -31,7 +31,7 @@
         >
           开始智能评估
         </el-button>
-        <el-button v-if="evalStore.currentReport" type="primary" size="large" class="px-10 rounded-xl font-bold" @click="$emit('restart')">
+        <el-button v-if="evalStore.currentReport" type="primary" size="large" class="px-10 rounded-xl font-bold" @click="$emit('new-evaluation')">
           开启新评估
         </el-button>
         <el-button 
@@ -58,7 +58,7 @@ import { computed } from 'vue';
 import { useEvaluationStore, useKnowledgeStore } from '@/store';
 import { Back, CollectionTag } from '@element-plus/icons-vue';
 
-defineEmits(['start', 'restart', 'archive']);
+defineEmits(['start', 'restart', 'new-evaluation', 'archive']);
 
 const evalStore = useEvaluationStore();
 const knowledgeStore = useKnowledgeStore();

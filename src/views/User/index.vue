@@ -33,6 +33,7 @@
       <MainFooter 
         @start="handleStartEvaluation" 
         @restart="handleRestart"
+        @new-evaluation="handleNewEvaluation"
         @archive="openArchiveDialog"
       />
     </main>
@@ -192,6 +193,10 @@ const handleRestart = () => {
   handleRestartEvaluation((message, title, options) => {
     return ElMessageBox.confirm(message, title, options);
   });
+};
+
+const handleNewEvaluation = () => {
+  evalStore.reset();
 };
 
 const loadHistory = async (history: any) => {
