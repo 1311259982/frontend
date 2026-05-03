@@ -544,6 +544,7 @@
         <el-form-item label="厂商">
           <el-select v-model="newModel.provider" class="w-full">
             <el-option label="OpenAI" value="OpenAI" />
+            <el-option label="NVIDIA NIM" value="NVIDIA" />
             <el-option label="Anthropic" value="Anthropic" />
             <el-option label="Google" value="Google" />
             <el-option label="Zhipu AI" value="Zhipu" />
@@ -570,6 +571,7 @@
         <el-form-item label="厂商">
           <el-select v-model="editingModel.provider" class="w-full">
             <el-option label="OpenAI" value="OpenAI" />
+            <el-option label="NVIDIA NIM" value="NVIDIA" />
             <el-option label="Anthropic" value="Anthropic" />
             <el-option label="Google" value="Google" />
             <el-option label="Zhipu AI" value="Zhipu" />
