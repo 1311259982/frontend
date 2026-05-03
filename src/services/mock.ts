@@ -452,3 +452,69 @@ export const deleteUpload = async (fileId: number): Promise<void> => {
     await delay(200);
     console.log(`[Mock] Deleting upload file_id=${fileId}`);
 };
+
+// ─────────────────────────────────────────────
+// 提示词配置相关 Mock
+// ─────────────────────────────────────────────
+
+const _mockPrompts: Record<string, string> = {
+    completeness: '请评估需求文档的完整性...',
+    correctness: '请评估需求文档的正确性...',
+    unambiguity: '请评估需求文档的清晰度...',
+    feasibility: '请评估需求文档的可行性...',
+    verifiability: '请评估需求文档的可测试性...',
+    traceability: '请评估需求文档的可追溯性...',
+};
+
+export const getPrompts = async (): Promise<any[]> => {
+    await delay(200);
+    return Object.entries(_mockPrompts).map(([name, content]) => ({ name, content }));
+};
+
+export const updatePrompt = async (name: string, content: string): Promise<any> => {
+    await delay(200);
+    _mockPrompts[name] = content;
+    return { success: true, name, content };
+};
+
+export const fetchPromptSchema = async (): Promise<{
+    fields: Record<string, {
+        type: string;
+        required: boolean;
+        description: string;
+    }>;
+    schema_lock: boolean;
+}> => {
+    await delay(200);
+    return {
+        fields: {
+            completeness: { type: 'string', required: true, description: '完整性评估提示词' },
+            correctness: { type: 'string', required: true, description: '正确性评估提示词' },
+            unambiguity: { type: 'string', required: true, description: '清晰度评估提示词' },
+            feasibility: { type: 'string', required: true, description: '可行性评估提示词' },
+            verifiability: { type: 'string', required: true, description: '可测试性评估提示词' },
+            traceability: { type: 'string', required: true, description: '可追溯性评估提示词' },
+        },
+        schema_lock: false,
+    };
+};
+
+export const updateFieldDescriptions = async (
+    name: string,
+    fields: Record<string, string>
+): Promise<any> => {
+    await delay(200);
+    return { success: true, name, updated_fields: Object.keys(fields) };
+};
+
+export const updateSmellDeduction = async (config: {
+    high_min: number;
+    high_max: number;
+    medium_min: number;
+    medium_max: number;
+    low_min: number;
+    low_max: number;
+}): Promise<any> => {
+    await delay(200);
+    return { success: true, config };
+};

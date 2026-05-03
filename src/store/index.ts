@@ -295,7 +295,7 @@ export const useModelStore = defineStore('models', {
     async fetchPromptSchema() {
       try {
         const response = await fetchPromptSchema();
-        this.prompts.outputSchema = response.data || response;
+        this.prompts.outputSchema = response;
         console.log('[ModelStore] Fetched prompt schema successfully.');
         return this.prompts.outputSchema;
       } catch (error: any) {
